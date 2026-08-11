@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>游戏房间 · 剧本杀</title>
+	<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+	<header class="topbar">
+		<h1>🎭 <span id="room-title">游戏房间</span></h1>
+		<div class="topbar-right">
+			<span id="phase-chip" class="chip"></span>
+			<a class="link" href="/">← 返回剧本库</a>
+		</div>
+	</header>
+
+	<main class="room">
+		<!-- 左：公开聊天 -->
+		<section class="chat">
+			<div class="chat-head">
+				<h2>公开讨论</h2>
+				<span id="turn-banner" class="turn-banner"></span>
+			</div>
+			<div id="chat-log" class="chat-log"></div>
+		</section>
+
+		<!-- 右：我的角色 + 行动 -->
+		<aside class="sidebar">
+			<section class="panel" id="role-panel">
+				<h2 id="my-role-name">—</h2>
+				<p id="my-role-public" class="muted"></p>
+				<div class="secret-box">
+					<h3>私密信息（只有你知道）</h3>
+					<p id="my-role-secret"></p>
+				</div>
+				<h3>目标</h3>
+				<p id="my-role-goal"></p>
+				<h3>我的线索</h3>
+				<ul id="my-clues" class="clue-list"></ul>
+			</section>
+
+			<section class="panel" id="action-panel">
+				<h2>行动</h2>
+				<div id="action-body"></div>
+			</section>
+
+			<section class="panel">
+				<h2>私聊与调查结果</h2>
+				<div id="private-log" class="chat-log small"></div>
+			</section>
+		</aside>
+	</main>
+
+	<dialog id="result-dialog">
+		<div id="result-body"></div>
+		<button id="result-close">知道了</button>
+	</dialog>
+
+	<script type="module" src="/room.js"></script>
+</body>
+</html>

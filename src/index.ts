@@ -1,0 +1,37 @@
+import { buildServer } from "./server/index.js";
+import {
+	buildModelsRegistry,
+	loadModelsConfigFile,
+	resolveRoleModel,
+} from "./config/models.js";
+import type { GameDeps } from "./server/games.js";
+
+const config = loadModelsConfigFile();
+const models = buildModelsRegistry(config);
+
+const generator = resolveRoleModel(config, models, "generator");
+const narrator = resolveRoleModel(config, models, "narrator");
+const player = resolveRoleModel(config, models, "player");
+
+const deps: GameDeps = {
+	models,
+	generatorModel: generator.model,
+	generatorThinking: generator.thinkingLevel ?? "high",
+	narratorModel: narrator.model,
+	narratorThinking: narrator.thinkingLevel ?? "medium",
+	playerModel: player.model,
+	playerThinking: player.thinkingLevel ?? "low",
+};
+
+const port = Number(process.env.PORT) || 3000;
+const host = process.env.HOST || "127.0.0.1";
+
+const app = await buildServer(deps);
+
+try {
+	await app.listen({ port, host });
+	console.log(`剧本杀系统已启动: http://${host}:${port}`);
+} catch (e) {
+	app.log.error(e);
+	process.exit(1);
+}

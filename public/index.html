@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>剧本杀 · 生成与游玩</title>
+	<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+	<header class="topbar">
+		<h1>🎭 剧本杀工坊</h1>
+	</header>
+
+	<main class="page">
+		<section class="panel gen-panel">
+			<h2>生成新剧本</h2>
+			<form id="gen-form" class="gen-form">
+				<label>题材 / 背景
+					<input id="gen-topic" type="text" placeholder="如：民国公馆的密室凶案，死者是老爷……" required />
+				</label>
+				<label>人数
+					<select id="gen-count">
+						<option value="3">3 人</option>
+						<option value="4">4 人</option>
+						<option value="5" selected>5 人</option>
+						<option value="6">6 人</option>
+						<option value="7">7 人</option>
+						<option value="8">8 人</option>
+					</select>
+				</label>
+				<label>类型
+					<input id="gen-genre" type="text" placeholder="可选，如：本格推理" />
+				</label>
+				<label>难度
+					<input id="gen-difficulty" type="text" placeholder="可选，如：进阶" />
+				</label>
+				<button id="gen-submit" type="submit">开始生成</button>
+			</form>
+			<p id="gen-status" class="status"></p>
+		</section>
+
+		<section class="panel">
+			<h2>剧本库</h2>
+			<div id="script-list" class="script-grid"></div>
+			<p id="script-empty" class="muted">还没有剧本。用上方表单生成第一个吧。</p>
+		</section>
+	</main>
+
+	<!-- 选角对话框 -->
+	<dialog id="role-dialog">
+		<div class="dialog-head">
+			<h2 id="role-dialog-title">选择角色</h2>
+			<button class="close" id="role-dialog-close" aria-label="关闭">×</button>
+		</div>
+		<div id="role-dialog-body"></div>
+	</dialog>
+
+	<script type="module" src="/index.js"></script>
+</body>
+</html>
