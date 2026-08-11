@@ -109,4 +109,18 @@ dialog.addEventListener("click", (e) => {
 	if (e.target === dialog) dialog.close();
 });
 
+// 对话框打开时锁定 body 滚动（iOS 兼容）
+function lockScroll() {
+	document.body.classList.add("dialog-open");
+}
+function unlockScroll() {
+	document.body.classList.remove("dialog-open");
+}
+const origOpen = dialog.showModal;
+dialog.showModal = function () {
+	lockScroll();
+	origOpen.call(this);
+};
+dialog.addEventListener("close", unlockScroll);
+
 loadScripts();

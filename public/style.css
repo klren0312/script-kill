@@ -11,16 +11,26 @@
 	--bad: #f87171;
 	--warn: #fbbf24;
 	--mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+	/* 触控目标最小尺寸 */
+	--tap: 44px;
+	/* 底部 tab 栏高度（移动端） */
+	--tabbar-h: 56px;
+	/* 安全区 */
+	--safe-bottom: env(safe-area-inset-bottom, 0px);
+	--safe-top: env(safe-area-inset-top, 0px);
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
 body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 	line-height: 1.55;
 	min-height: 100vh;
+	/* 防止移动端过度滚动反弹出现空白 */
+	overscroll-behavior: none;
 }
 
 .topbar {
@@ -33,6 +43,8 @@ body {
 	position: sticky;
 	top: 0;
 	z-index: 10;
+	/* 顶部安全区 */
+	padding-top: calc(12px + var(--safe-top));
 }
 .topbar h1 { font-size: 18px; margin: 0; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
@@ -57,6 +69,7 @@ body {
 	padding: 3px 12px;
 	font-size: 12px;
 	color: var(--muted);
+	white-space: nowrap;
 }
 
 .muted { color: var(--muted); }
@@ -71,7 +84,8 @@ body {
 	border-radius: 8px;
 	color: var(--text);
 	padding: 8px 10px;
-	font-size: 14px;
+	/* 16px 防止 iOS 聚焦缩放 */
+	font-size: 16px;
 	min-width: 0;
 }
 button {
@@ -83,6 +97,8 @@ button {
 	font-size: 14px;
 	cursor: pointer;
 	transition: opacity 0.15s;
+	/* 触控友好：最小高度 */
+	min-height: var(--tap);
 }
 button:hover { opacity: 0.9; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -130,7 +146,7 @@ dialog {
 dialog::backdrop { background: rgba(0,0,0,0.6); }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .dialog-head h2 { margin: 0; font-size: 17px; }
-.close { background: transparent; color: var(--muted); font-size: 20px; padding: 0 8px; }
+.close { background: transparent; color: var(--muted); font-size: 22px; padding: 0 8px; min-height: 0; }
 
 .role-option {
 	display: flex;
@@ -159,13 +175,12 @@ dialog::backdrop { background: rgba(0,0,0,0.6); }
 	max-width: 1200px;
 	margin: 0 auto;
 }
-@media (max-width: 900px) { .room { grid-template-columns: 1fr; } }
 
 .chat { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-height: 70vh; }
 .chat-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .chat-head h2 { margin: 0; font-size: 16px; }
 .turn-banner { font-size: 13px; color: var(--warn); }
-.chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; max-height: 62vh; }
+.chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; max-height: 62vh; -webkit-overflow-scrolling: touch; }
 .chat-log.small { max-height: 30vh; }
 
 .msg { padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); font-size: 14px; white-space: pre-wrap; word-break: break-word; }
@@ -198,7 +213,7 @@ dialog::backdrop { background: rgba(0,0,0,0.6); }
 	border-radius: 8px;
 	color: var(--text);
 	padding: 8px 10px;
-	font-size: 14px;
+	font-size: 16px;
 	font-family: inherit;
 	resize: vertical;
 }
@@ -206,7 +221,6 @@ dialog::backdrop { background: rgba(0,0,0,0.6); }
 .btn-row button { flex: 1; min-width: 72px; padding: 8px 10px; font-size: 13px; }
 .target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .target-grid button { font-size: 12px; padding: 6px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
-.target-grid button:hover { border-color: var(--accent); }
 
 /* ---------- 结果 ---------- */
 #result-body h2 { margin-top: 0; }
@@ -214,3 +228,137 @@ dialog::backdrop { background: rgba(0,0,0,0.6); }
 .truth-box { margin-top: 12px; background: var(--panel-2); border-radius: 8px; padding: 12px; font-size: 14px; }
 
 .hidden { display: none !important; }
+
+/* ============================================================
+   移动端底部 Tab 栏（桌面端隐藏）
+    ============================================================ */
+.mobile-tabs {
+	display: none;
+}
+
+/* ============================================================
+   对话框打开时锁定 body 滚动（iOS 兼容）
+    ============================================================ */
+body.dialog-open {
+	overflow: hidden;
+	position: fixed;
+	width: 100%;
+}
+
+/* ============================================================
+   响应式：≤900px
+   ============================================================ */
+@media (max-width: 900px) {
+	.room {
+		grid-template-columns: 1fr;
+		gap: 0;
+		padding: 12px 12px 0;
+	}
+
+	/* 单栏：聊天常驻；侧栏三个面板由 tab 控制 */
+	.chat {
+		/* 聊天区占满主视口高度，底部留 tab 栏空间 */
+		min-height: calc(100vh - var(--tabbar-h) - 48px);
+	}
+	.chat-log { max-height: none; }
+
+	/* 侧栏面板默认隐藏，激活 tab 时显示 */
+	.sidebar { gap: 12px; min-height: calc(100vh - var(--tabbar-h) - 48px); }
+	.sidebar > [data-tab] { display: none; }
+	.sidebar > [data-tab].tab-active { display: block; }
+
+	/* 聊天 tab 由 .chat 元素自身控制 */
+	.chat { display: flex; }
+	.chat.tab-hidden { display: none; }
+
+	/* 底部 Tab 栏 */
+	.mobile-tabs {
+		display: flex;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: calc(var(--tabbar-h) + var(--safe-bottom));
+		padding-bottom: var(--safe-bottom);
+		background: var(--panel);
+		border-top: 1px solid var(--border);
+		z-index: 20;
+	}
+	.mobile-tabs button {
+		flex: 1;
+		background: transparent;
+		color: var(--muted);
+		border: none;
+		border-radius: 0;
+		font-size: 13px;
+		padding: 8px 4px;
+		min-height: var(--tabbar-h);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+	}
+	.mobile-tabs button.active {
+		color: var(--accent-2);
+		box-shadow: inset 0 -2px 0 var(--accent-2);
+	}
+
+	/* 给页面底部留出 tab 栏空间，避免最后内容被遮挡 */
+	body { padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom)); }
+
+	/* 生成表单：单列堆叠 */
+	.gen-form { grid-template-columns: 1fr; }
+	.gen-form button { width: 100%; }
+
+	/* 顶栏文字缩小，避免换行 */
+	.topbar { padding: 8px 14px; padding-top: calc(8px + var(--safe-top)); }
+	.topbar h1 { font-size: 15px; }
+	.topbar-right { gap: 8px; }
+	.topbar-right .link { font-size: 13px; }
+
+	/* panel 内边距收紧 */
+	.panel { padding: 14px; }
+
+	/* 投票/调查目标网格：单列更易点 */
+	.target-grid { grid-template-columns: 1fr; }
+
+	/* 对话框：更贴近全屏，避免在小屏被裁切 */
+	dialog { width: 94vw; max-height: 88vh; border-radius: 12px; }
+}
+
+/* ============================================================
+   响应式：≤420px（小手机）
+    ============================================================ */
+@media (max-width: 420px) {
+	.page { margin: 16px auto; padding: 0 10px; gap: 14px; }
+	.panel { padding: 12px; }
+	.msg { font-size: 13px; padding: 7px 10px; }
+	.script-grid { grid-template-columns: 1fr; }
+	.role-option { padding: 10px; }
+
+	/* 线索出示按钮：加大触控区域 */
+	.clue-item button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+}
+
+/* ============================================================
+   响应式：≤360px（超小屏）
+    ============================================================ */
+@media (max-width: 360px) {
+	.mobile-tabs button { font-size: 11px; padding: 8px 2px; }
+
+	/* Tab 栏图标换行显示，节省横向空间 */
+	.mobile-tabs button { flex-direction: column; gap: 2px; line-height: 1.1; }
+
+	.topbar h1 { font-size: 14px; }
+	.topbar-right .link { font-size: 12px; }
+}
+
+/* ============================================================
+   触控优化：去除移动端按钮的 hover 抖动，明确 :active 反馈
+   ============================================================ */
+@media (hover: none) {
+	.script-card:hover { transform: none; }
+	button:active { opacity: 0.7; }
+	.script-card:active { border-color: var(--accent); }
+	.target-grid button:active { border-color: var(--accent); }
+}

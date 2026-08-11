@@ -491,4 +491,47 @@ function showResult() {
 
 $("result-close").onclick = () => resultDialog.close();
 
+// 对话框打开时锁定 body 滚动（iOS 兼容）
+function lockScroll() {
+	document.body.classList.add("dialog-open");
+}
+function unlockScroll() {
+	document.body.classList.remove("dialog-open");
+}
+const _origShow = resultDialog.showModal;
+resultDialog.showModal = function () {
+	lockScroll();
+	_origShow.call(this);
+};
+resultDialog.addEventListener("close", unlockScroll);
+
+// ---------- 移动端 Tab 切换 ----------
+
+function initMobileTabs() {
+	const tabs = document.querySelectorAll("#mobile-tabs button");
+	const chat = document.querySelector(".chat");
+	const panels = document.querySelectorAll(".sidebar [data-tab]");
+
+	tabs.forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const target = btn.dataset.tabTarget;
+
+			tabs.forEach((b) => b.classList.toggle("active", b === btn));
+
+			if (target === "chat") {
+				chat.classList.remove("tab-hidden");
+				panels.forEach((p) => p.classList.remove("tab-active"));
+				scrollBottom(chatLog);
+			} else {
+				chat.classList.add("tab-hidden");
+				panels.forEach((p) => p.classList.toggle("tab-active", p.dataset.tab === target));
+			}
+
+			// 切换 tab 后回到顶部，避免上一 tab 的滚动位置残留
+			window.scrollTo({ top: 0 });
+		});
+	});
+}
+
+initMobileTabs();
 load();

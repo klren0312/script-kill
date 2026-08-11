@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 	<title>游戏房间 · 剧本杀</title>
 	<link rel="stylesheet" href="/style.css" />
 </head>
@@ -17,7 +17,7 @@
 
 	<main class="room">
 		<!-- 左：公开聊天 -->
-		<section class="chat">
+		<section class="chat" data-tab="chat" data-tab-default>
 			<div class="chat-head">
 				<h2>公开讨论</h2>
 				<span id="turn-banner" class="turn-banner"></span>
@@ -27,7 +27,7 @@
 
 		<!-- 右：我的角色 + 行动 -->
 		<aside class="sidebar">
-			<section class="panel" id="role-panel">
+			<section class="panel" id="role-panel" data-tab="role">
 				<h2 id="my-role-name">—</h2>
 				<p id="my-role-public" class="muted"></p>
 				<div class="secret-box">
@@ -40,17 +40,25 @@
 				<ul id="my-clues" class="clue-list"></ul>
 			</section>
 
-			<section class="panel" id="action-panel">
+			<section class="panel" id="action-panel" data-tab="action">
 				<h2>行动</h2>
 				<div id="action-body"></div>
 			</section>
 
-			<section class="panel">
+			<section class="panel" data-tab="private">
 				<h2>私聊与调查结果</h2>
 				<div id="private-log" class="chat-log small"></div>
 			</section>
 		</aside>
 	</main>
+
+	<!-- 移动端底部 Tab 栏（桌面端隐藏） -->
+	<nav id="mobile-tabs" class="mobile-tabs">
+		<button data-tab-target="chat" class="active">💬 讨论</button>
+		<button data-tab-target="role">🎭 角色</button>
+		<button data-tab-target="action">⚔️ 行动</button>
+		<button data-tab-target="private">🔍 私聊</button>
+	</nav>
 
 	<dialog id="result-dialog">
 		<div id="result-body"></div>
