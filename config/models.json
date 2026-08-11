@@ -4,6 +4,7 @@
 			"models": []
 		},
 		"deepseek-gw": {
+			"provider": "deepseek-gw",
 			"baseUrl": "https://api.deepseek.com/anthropic",
 			"api": "anthropic-messages",
 			"apiKey": "$ANTHROPIC_AUTH_TOKEN",
@@ -15,6 +16,7 @@
 			]
 		},
 		"ant-ling": {
+			"provider": "ant-ling",
 			"baseUrl": "https://api.ant-ling.com/v1",
 			"api": "openai-completions",
 			"apiKey": "$ANT_LING_API_KEY",
@@ -26,6 +28,7 @@
 			]
 		},
 		"openrouter": {
+			"provider": "openrouter",
 			"baseUrl": "https://openrouter.ai/api/v1",
 			"api": "openai-completions",
 			"apiKey": "$OPENROUTER_API_KEY",
@@ -37,6 +40,7 @@
 			]
 		},
 		"sensenova": {
+			"provider": "sensenova",
 			"baseUrl": "https://token.sensenova.cn/v1",
 			"api": "openai-completions",
 			"apiKey": "$SENSENOVA_API_KEY",

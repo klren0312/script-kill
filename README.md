@@ -95,10 +95,11 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 ```jsonc
 {
 	"providers": {
-		// 内置 provider：留空即用 pi-ai 的 builtinModels 目录
+		// 内置 provider：留空即用 pi-ai 的 builtinModels 目录（无 baseUrl，无需 provider 字段）
 		"anthropic": { "models": [] },
-		// 自定义 provider：OpenAI 兼容端点
+		// 自定义 provider：OpenAI 兼容端点（有 baseUrl 必须声明 provider 字符串，值自定义即可）
 		"my-openai": {
+			"provider": "my-openai",
 			"baseUrl": "https://...",
 			"api": "openai-completions",
 			"apiKey": "$MY_API_KEY",        // 支持字面量 / $ENV_VAR / !command
@@ -106,6 +107,7 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 		},
 		// 自定义 provider：Anthropic 兼容端点（如 DeepSeek 网关）
 		"deepseek-gw": {
+			"provider": "deepseek-gw",
 			"baseUrl": "https://api.deepseek.com/anthropic",
 			"api": "anthropic-messages",
 			"apiKey": "$ANTHROPIC_AUTH_TOKEN",
@@ -113,6 +115,7 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 		},
 		// 自定义 provider：ant-ling（OpenAI 兼容）
 		"ant-ling": {
+			"provider": "ant-ling",
 			"baseUrl": "https://api.ant-ling.com/v1",
 			"api": "openai-completions",
 			"apiKey": "$ANT_LING_API_KEY",

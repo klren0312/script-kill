@@ -34,6 +34,32 @@ export interface ResolvedModel {
 	thinkingLevel?: ThinkingLevel;
 }
 
+function validateProviderStructure(
+	providers: unknown,
+	roles: unknown,
+): asserts providers is Record<string, ProviderConfig> {
+	if (typeof providers !== "object" || providers === null) {
+		throw new Error("config/models.json 缺少 providers 字段或格式错误");
+	}
+	for (const [name, value] of Object.entries(providers as Record<string, unknown>)) {
+		if (typeof value !== "object" || value === null) {
+			throw new Error(`config/models.json providers.${name} 不是对象`);
+		}
+		const p = value as Record<string, unknown>;
+		// 内置 provider（无 baseUrl，如 anthropic）由 builtinModels 提供，无需 provider 字段；
+		// 自定义 provider（有 baseUrl）必须声明 provider 字符串类型。
+		if (typeof p.baseUrl === "string" && typeof p.provider !== "string") {
+			throw new Error(`config/models.json providers.${name}.provider 必须是字符串（自定义 provider 需声明 provider）`);
+		}
+		if (p.apiKey !== undefined && typeof p.apiKey !== "string") {
+			throw new Error(`config/models.json providers.${name}.apiKey 必须是字符串`);
+		}
+	}
+	if (typeof roles !== "object" || roles === null) {
+		throw new Error("config/models.json 缺少 roles 字段或格式错误");
+	}
+}
+
 export function loadModelsConfigFile(): ModelsConfigFile {
 	ensureEnvLoaded(); // 先加载 .env，使 $ENV_VAR 可解析
 	const raw = JSON.parse(readFileSync(configPath, "utf8")) as Partial<ModelsConfigFile>;
@@ -43,6 +69,7 @@ export function loadModelsConfigFile(): ModelsConfigFile {
 	for (const key of ["generator", "narrator", "player"] as const) {
 		if (!raw.roles[key]) throw new Error(`config/models.json 缺少 roles.${key}`);
 	}
+	validateProviderStructure(raw.providers, raw.roles);
 	return raw as ModelsConfigFile;
 }
 
@@ -53,7 +80,8 @@ function interpolateKey(spec?: string): string | undefined {
 		return process.env[spec.slice(1)];
 	}
 	if (spec.startsWith("!")) {
-		return execSync(spec.slice(1), { encoding: "utf8" }).trim();
+		// 仅用于本地可信命令；加超时避免命令挂起阻塞进程。
+		return execSync(spec.slice(1), { encoding: "utf8", timeout: 10_000, windowsHide: true }).trim();
 	}
 	return spec;
 }

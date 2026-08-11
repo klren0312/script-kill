@@ -41,7 +41,7 @@ data/scripts/  data/games/  生成的剧本/会话快照（git 忽略）
 ## 关键约定（踩过的坑，务必遵守）
 
 1. **密钥只放 `.env`**：`config/models.json` 的 `apiKey` 只写 `$ENV_VAR`（如 `$ANT_LING_API_KEY`、`$OPENROUTER_API_KEY`）。**任何明文 API key 禁止写进配置文件、README 或 git。** 新增 provider 的 key 时：改 `config/models.json` 为 `$VAR`，把真实值加进 `.env`（git 忽略）和 `.env.example`（模板，留空）。
-2. **默认主力模型是 ant-ling**（OpenAI 兼容，`Ling-3.0-flash`）。备用：`deepseek-gw`（DeepSeek Anthropic 网关）与 `openrouter`，改 `config/models.json` 的 `roles` 即可切换。
+2. **默认主力模型是 ant-ling**（OpenAI 兼容，`Ling-3.0-flash`）。备用：`deepseek-gw`（DeepSeek Anthropic 网关）与 `openrouter`，改 `config/models.json` 的 `roles` 即可切换。**自定义 provider（有 `baseUrl`）必须在配置里声明字符串 `provider` 字段**（值自定义即可，当前仅校验用）；内置 provider（无 `baseUrl`）不需要。
 3. **`.env` 由 `src/config/env.ts` 的 `ensureEnvLoaded()` 加载**，在 `loadModelsConfigFile()` 顶部调用。OS 环境变量优先于 `.env`。`setx` 只对之后启动的进程生效，本会话的 bash 可能拿不到 —— 依赖 `.env` 即可。
 4. **ant-ling 端点怪癖**：
    - 应用从不发送 `max_tokens`（config 的 `maxTokens` 不流通），别给它加 `max_tokens`。实测 `64` 会 500，`16384`/`65536` 正常。
