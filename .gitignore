@@ -5,3 +5,4 @@ data/
 # 密钥与本地环境
 .env
 .env.*
+!.env.example

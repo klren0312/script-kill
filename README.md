@@ -43,6 +43,8 @@ npm run check    # tsc --noEmit
 npm run generate -- "题材描述" [玩家人数] [类型] [难度]   # CLI 生成剧本
 ```
 
+开发约定（架构细节、配置/密钥规范、提交流程）见项目根 `CLAUDE.md`。
+
 ## 模型配置
 
 模型可配置且支持自定义模型。编辑 `config/models.json`：
@@ -83,6 +85,8 @@ npm run generate -- "题材描述" [玩家人数] [类型] [难度]   # CLI 生�
 ```
 
 `apiKey` 支持字面量（如上例）、`$ENV_VAR`（环境变量）或 `!command`（执行命令取值）。**建议把密钥放到环境变量再以 `$...` 引用**，避免密钥随 `config/models.json` 进 git。
+
+**环境变量配置文件**：项目在启动时自动加载根目录 `.env`（见 `.env.example` 模板，复制成 `.env` 填入真实值即可；`.env` 已被 git 忽略）。优先级为 系统环境变量 > `.env`。例如 ant-ling 的 key 填 `ANT_LING_API_KEY=...`，config 里写 `"apiKey": "$ANT_LING_API_KEY"` 即自动生效。
 
 `ant-ling` 是 OpenAI 兼容端点（`https://api.ant-ling.com/v1/chat/completions`，模型 `Ling-3.0-flash`，本环境实测生成一个 3 人剧本约 20 秒）。`deepseek-gw` 走 DeepSeek 的 Anthropic 兼容网关（`https://api.deepseek.com/anthropic` + `$ANTHROPIC_AUTH_TOKEN`，模型 `deepseek-v4-flash`），作为备用 provider 保留在 `providers` 里，改 `roles` 即可切换。若你的环境有 Anthropic API key，把角色指回 `anthropic` 内置 provider 即可。
 

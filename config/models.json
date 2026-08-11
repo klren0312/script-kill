@@ -24,11 +24,33 @@
 					"name": "Ling 3.0 Flash"
 				}
 			]
+		},
+		"openrouter": {
+			"baseUrl": "https://openrouter.ai/api/v1",
+			"api": "openai-completions",
+			"apiKey": "$OPENROUTER_API_KEY",
+			"models": [
+				{
+					"id": "openrouter/free",
+					"name": "OpenRouter Free"
+				}
+			]
+		},
+		"sensenova": {
+			"baseUrl": "https://token.sensenova.cn/v1",
+			"api": "openai-completions",
+			"apiKey": "$SENSENOVA_API_KEY",
+			"models": [
+				{
+					"id": "sensenova-6.7-flash-lite",
+					"name": "SenseNova 6.7 Flash Lite"
+				}
+			]
 		}
 	},
 	"roles": {
 		"generator": { "provider": "ant-ling", "model": "Ling-3.0-flash", "thinkingLevel": "high" },
-		"narrator": { "provider": "ant-ling", "model": "Ling-3.0-flash", "thinkingLevel": "medium" },
-		"player": { "provider": "ant-ling", "model": "Ling-3.0-flash", "thinkingLevel": "low" }
+		"narrator": { "provider": "sensenova", "model": "sensenova-6.7-flash-lite", "thinkingLevel": "medium" },
+		"player": { "provider": "openrouter", "model": "openrouter/free", "thinkingLevel": "medium" }
 	}
 }

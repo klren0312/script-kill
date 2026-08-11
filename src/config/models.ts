@@ -7,6 +7,7 @@ import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messag
 import type { Model, MutableModels } from "@earendil-works/pi-ai";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { configPath } from "../paths.js";
+import { ensureEnvLoaded } from "./env.js";
 
 export type RoleKey = "generator" | "narrator" | "player";
 
@@ -34,6 +35,7 @@ export interface ResolvedModel {
 }
 
 export function loadModelsConfigFile(): ModelsConfigFile {
+	ensureEnvLoaded(); // 先加载 .env，使 $ENV_VAR 可解析
 	const raw = JSON.parse(readFileSync(configPath, "utf8")) as Partial<ModelsConfigFile>;
 	if (!raw.providers || !raw.roles) {
 		throw new Error("config/models.json 需要 providers 和 roles 字段");
