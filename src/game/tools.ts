@@ -12,7 +12,8 @@ export interface ToolHost {
 		usedInvestigation: Record<string, boolean>;
 		roleClues: Record<string, string[]>;
 	};
-	useInvestigation(): boolean;
+	/** 仅查询本回合是否已调查过（不修改额度）。额度扣减统一由 engine.performInvestigate 负责。 */
+	hasInvestigated(): boolean;
 	recordPublic(event: Omit<GameEvent, "id" | "at">): void;
 	recordPrivate(toRoleId: string, event: Omit<GameEvent, "id" | "at">): void;
 	resolveInvestigation(target: string): Promise<string>;
@@ -90,7 +91,7 @@ export function createRoleTools(host: ToolHost): AgentTool[] {
 				if (!host.validTargets().includes(target) && !host.locationIds().includes(target)) {
 					return ok(`目标 "${target}" 不存在。`);
 				}
-				if (!host.useInvestigation()) {
+				if (host.hasInvestigated()) {
 					return ok("你本回合已经调查过了，不能再调查。");
 				}
 				const result = await host.resolveInvestigation(target);

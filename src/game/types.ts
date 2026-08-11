@@ -1,5 +1,5 @@
-import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
-import type { MutableModels } from "@earendil-works/pi-ai";
+import type { Agent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Model, MutableModels } from "@earendil-works/pi-ai";
 import type { Script, Truth } from "../domain/schema.js";
 
 export type Phase = "setup" | "reading" | "discussion" | "voting" | "reveal" | "finished";
@@ -53,7 +53,8 @@ export interface PublicSnapshot {
 	roleClues: Record<string, string[]>;
 	votes: Record<string, string | null>;
 	publicEvents: GameEvent[];
-	privateEvents: GameEvent[];
+	/** 当前人类玩家自己的私密事件（字段名避免与快照中的 privateEvents 混淆） */
+	myPrivateEvents: GameEvent[];
 	winner?: string;
 }
 
@@ -96,8 +97,8 @@ export interface EngineDeps {
 	onEvent: (event: GameEvent) => void;
 	persist: () => void;
 	models: MutableModels;
-	narratorModel: import("@earendil-works/pi-ai").Model<any>;
-	narratorThinking: import("@earendil-works/pi-agent-core").ThinkingLevel;
-	playerModel: import("@earendil-works/pi-ai").Model<any>;
-	playerThinking: import("@earendil-works/pi-agent-core").ThinkingLevel;
+	narratorModel: Model<any>;
+	narratorThinking: ThinkingLevel;
+	playerModel: Model<any>;
+	playerThinking: ThinkingLevel;
 }

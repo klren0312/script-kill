@@ -3,11 +3,19 @@ import {
 	buildModelsRegistry,
 	loadModelsConfigFile,
 	resolveRoleModel,
+	validateConfig,
 } from "./config/models.js";
 import type { GameDeps } from "./server/games.js";
 
 const config = loadModelsConfigFile();
 const models = buildModelsRegistry(config);
+
+// 启动预检：模型角色是否都能解析，缺失则给出明确告警（修复 #12）。
+const problems = validateConfig(config, models);
+if (problems.length > 0) {
+	console.warn("[配置预检] 以下问题可能影响运行：");
+	for (const p of problems) console.warn(`  - ${p}`);
+}
 
 const generator = resolveRoleModel(config, models, "generator");
 const narrator = resolveRoleModel(config, models, "narrator");

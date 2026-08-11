@@ -1,9 +1,9 @@
 import type { MutableModels, Model } from "@earendil-works/pi-ai";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { EngineDeps, GameEvent, GameSession, PublicSnapshot } from "../game/types.js";
 import { getScript, humanRoleView } from "../domain/script-library.js";
 import { GameEngine } from "../game/engine.js";
 import { listGames, loadGame, saveGame } from "../game/snapshots.js";
-import type { GameSession, PublicSnapshot } from "../game/types.js";
 import { sseHub } from "./sse.js";
 
 export interface GameDeps {
@@ -14,6 +14,23 @@ export interface GameDeps {
 	narratorThinking: ThinkingLevel;
 	playerModel: Model<any>;
 	playerThinking: ThinkingLevel;
+}
+
+/** 从 GameDeps 中取出引擎所需的 5 个模型字段，组装成 EngineDeps（修复 #10：消除重复样板）。 */
+export function toEngineDeps(
+	deps: GameDeps,
+	onEvent: (e: GameEvent) => void,
+	persist: () => void,
+): EngineDeps {
+	return {
+		models: deps.models,
+		narratorModel: deps.narratorModel,
+		narratorThinking: deps.narratorThinking,
+		playerModel: deps.playerModel,
+		playerThinking: deps.playerThinking,
+		onEvent,
+		persist,
+	};
 }
 
 const sessions = new Map<string, GameSession>();
@@ -28,24 +45,23 @@ export function createGame(
 	if (!script.roles.some((r) => r.id === humanRoleId)) {
 		throw new Error(`剧本中没有角色 ${humanRoleId}`);
 	}
-	const session = GameEngine.create(script, humanRoleId, {
-		models: deps.models,
-		narratorModel: deps.narratorModel,
-		narratorThinking: deps.narratorThinking,
-		playerModel: deps.playerModel,
-		playerThinking: deps.playerThinking,
-		onEvent: () => {},
-		persist: () => {},
-	});
+	const gameIdRef = { value: "" };
+	const session = GameEngine.create(
+		script,
+		humanRoleId,
+		toEngineDeps(
+			deps,
+			(e) => {
+				if (e.scope === "public" || e.scope === humanRoleId) {
+					sseHub.broadcast(gameIdRef.value, e);
+				}
+			},
+			() => saveGame(session.snapshot),
+		),
+	);
 	const gameId = session.snapshot.id;
+	gameIdRef.value = gameId;
 	sessions.set(gameId, session);
-	// create 阶段不产生事件，因此此后绑定广播是安全的
-	session.deps.onEvent = (e) => {
-		if (e.scope === "public" || e.scope === session.snapshot.humanRoleId) {
-			sseHub.broadcast(gameId, e);
-		}
-	};
-	session.deps.persist = () => saveGame(session.snapshot);
 	session.deps.persist();
 	return { gameId, humanRole: humanRoleView(script, humanRoleId) };
 }
@@ -58,19 +74,20 @@ export function getSession(gameId: string, deps: GameDeps): GameSession {
 	if (!snap) throw new Error(`游戏 ${gameId} 不存在`);
 	const script = getScript(snap.scriptId);
 	if (!script) throw new Error(`剧本 ${snap.scriptId} 不存在`);
-	const session = GameEngine.restore(snap, script, {
-		models: deps.models,
-		narratorModel: deps.narratorModel,
-		narratorThinking: deps.narratorThinking,
-		playerModel: deps.playerModel,
-		playerThinking: deps.playerThinking,
-		onEvent: (e) => {
-			if (e.scope === "public" || e.scope === session.snapshot.humanRoleId) {
-				sseHub.broadcast(gameId, e);
-			}
-		},
-		persist: () => saveGame(session.snapshot),
-	});
+	const humanRoleId = snap.humanRoleId;
+	const session = GameEngine.restore(
+		snap,
+		script,
+		toEngineDeps(
+			deps,
+			(e) => {
+				if (e.scope === "public" || e.scope === humanRoleId) {
+					sseHub.broadcast(gameId, e);
+				}
+			},
+			() => saveGame(session.snapshot),
+		),
+	);
 	sessions.set(gameId, session);
 	return session;
 }
@@ -100,7 +117,7 @@ export function publicSnapshot(session: GameSession): PublicSnapshot {
 		roleClues: { [human]: snap.roleClues[human] ?? [] },
 		votes: snap.votes,
 		publicEvents: snap.publicEvents,
-		privateEvents: snap.privateEvents[human] ?? [],
+		myPrivateEvents: snap.privateEvents[human] ?? [],
 		winner: snap.winner,
 	};
 }

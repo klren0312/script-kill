@@ -65,6 +65,8 @@ export function leakCheck(text: string, info: LeakInfo): string | null {
 
 export function maskLeaks(text: string, info: LeakInfo): string {
 	let out = text;
+	// 真凶名与手法词都可能泄露真相，均做确定性脱敏兜底（模型二次改写仍可能遗漏）。
 	for (const n of info.culpritNames) out = out.split(n).join("某位玩家");
+	for (const t of info.methodTokens) out = out.split(t).join("某些手段");
 	return out;
 }

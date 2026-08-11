@@ -15,6 +15,16 @@ let me = null;
 let view = null; // scriptSelectView（角色/地点清单，用于调查与投票）
 let busy = false;
 
+// 将 API 快照字段（myPrivateEvents）归一到前端内部使用的 privateEvents。
+function normalizeSnapshot(snap) {
+	if (!snap) return snap;
+	if (snap.myPrivateEvents !== undefined) {
+		snap.privateEvents = snap.myPrivateEvents;
+		delete snap.myPrivateEvents;
+	}
+	return snap;
+}
+
 const esc = (s) =>
 	String(s ?? "").replace(/[&<>"']/g, (c) =>
 		({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
@@ -39,7 +49,7 @@ async function api(path, opts) {
 async function load() {
 	try {
 		me = await api(`/api/games/${gameId}/me`);
-		snapshot = await api(`/api/games/${gameId}`);
+		snapshot = normalizeSnapshot(await api(`/api/games/${gameId}`));
 		const script = await api(`/api/scripts/${encodeURIComponent(snapshot.scriptId)}`);
 		view = script;
 		$("room-title").textContent = script.title;
@@ -75,7 +85,7 @@ function openSse() {
 function handleEvent(ev) {
 	if (!snapshot) return;
 	if (ev.type === "snapshot") {
-		snapshot = ev.snapshot;
+		snapshot = normalizeSnapshot(ev.snapshot);
 		rebuildLogs();
 		render();
 		return;

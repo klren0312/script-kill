@@ -1,15 +1,16 @@
 import { uuidv7 } from "@earendil-works/pi-agent-core";
 import type { Agent } from "@earendil-works/pi-agent-core";
-import type { Role } from "../domain/schema.js";
+import type { Model, ThinkingLevel } from "@earendil-works/pi-ai";
+import type { Role, Script } from "../domain/schema.js";
+import { resolveClueText } from "../domain/script-library.js";
 import { createAgentFactory, lastAssistantText } from "../agents/factory.js";
 import { buildLeakInfo, buildNarratorPrompt, leakCheck, maskLeaks, type LeakInfo } from "./narrator.js";
 import { createRoleTools, type ToolHost } from "./tools.js";
-import type { GameEvent, GameSession, Phase } from "./types.js";
-import type { EngineDeps } from "./types.js";
+import type { EngineDeps, GameEvent, GameSession, Phase } from "./types.js";
 
 const DEFAULT_MAX_ROUNDS = 4;
 
-export function buildRolePrompt(script: import("../domain/schema.js").Script, role: Role): string {
+export function buildRolePrompt(script: Script, role: Role): string {
 	return `你是剧本杀《${script.title}》中的角色「${role.name}」。你要在这场推理游戏中扮演好这个角色，设法达成自己的目标，同时不让别人轻易识破你的底牌。
 
 【角色公开信息】（所有玩家都知道）
@@ -65,7 +66,7 @@ export class GameEngine {
 
 	// ---------- 创建 / 恢复 ----------
 
-	static create(script: import("../domain/schema.js").Script, humanRoleId: string, deps: EngineDeps): GameSession {
+	static create(script: Script, humanRoleId: string, deps: EngineDeps): GameSession {
 		const now = Date.now();
 		const publicClueIds = script.publicClues.map((c) => c.id);
 		const snapshot = {
@@ -123,7 +124,7 @@ export class GameEngine {
 
 	static restore(
 		snapshot: GameSession["snapshot"],
-		script: import("../domain/schema.js").Script,
+		script: Script,
 		deps: EngineDeps,
 	): GameSession {
 		const factory = createAgentFactory(deps.models);
@@ -195,14 +196,7 @@ export class GameEngine {
 	}
 
 	private clueText(clueId: string): string | undefined {
-		const s = this.session;
-		const pc = s.script.publicClues.find((c) => c.id === clueId);
-		if (pc) return pc.text;
-		for (const loc of s.script.locations) {
-			const c = loc.clues.find((x) => x.id === clueId);
-			if (c) return c.text;
-		}
-		return undefined;
+		return resolveClueText(this.session.script, clueId);
 	}
 
 	private async narratorPrompt(text: string): Promise<string> {
@@ -363,7 +357,7 @@ export class GameEngine {
 				text: "已投票",
 			});
 			this.touch();
-			this.maybeFinishVoting();
+			await this.maybeFinishVoting();
 		});
 	}
 
@@ -497,31 +491,42 @@ export class GameEngine {
 			if (roleId === s.snapshot.humanRoleId) continue;
 			await this.runAiVote(roleId);
 		}
-		this.maybeFinishVoting();
+		await this.maybeFinishVoting();
 	}
 
 	private async runAiVote(roleId: string): Promise<void> {
 		const s = this.session;
 		const agent = s.roles[roleId];
 		const role = this.role(roleId);
+		let voted = false;
 		try {
 			await agent.prompt(
 				`现在是投票阶段。请使用 vote 工具：target 填你认为的真凶的角色 id；若弃权填 null。`,
 			);
+			voted = s.snapshot.votes[roleId] !== undefined;
 		} catch (e) {
 			this.emitPublic({ type: "system", text: `角色 ${role.name} 投票出错: ${(e as Error).message}` });
 		}
-		if (s.snapshot.votes[roleId] === undefined) s.snapshot.votes[roleId] = null;
+		// 区分主动弃权与投票失败：
+		// - 已通过工具记录（含显式 null）=> 视为正常投票/弃权。
+		// - 未记录 => 兜底记为 null（投票失败，按弃权处理并记录日志）。
+		if (s.snapshot.votes[roleId] === undefined) {
+			s.snapshot.votes[roleId] = null;
+			if (voted) {
+				// 理论上不应发生：已投票却无记录，记入系统事件便于排查。
+				this.emitPublic({ type: "system", text: `角色 ${role.name} 投票记录丢失，按弃权处理。` });
+			}
+		}
 		this.emitPublic({ type: "vote", roleId, roleName: role.name, text: "已投票" });
 		this.touch();
-		this.maybeFinishVoting();
+		await this.maybeFinishVoting();
 	}
 
-	private maybeFinishVoting(): void {
+	private async maybeFinishVoting(): Promise<void> {
 		const s = this.session;
 		if (s.snapshot.phase !== "voting") return;
 		const allVoted = s.snapshot.order.every((r) => s.snapshot.votes[r] !== undefined);
-		if (allVoted) void this.reveal();
+		if (allVoted) await this.reveal();
 	}
 
 	private async reveal(): Promise<void> {
@@ -537,6 +542,8 @@ export class GameEngine {
 		const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
 		const topRole = top ? top[0] : null;
 		const topCount = top ? top[1] : 0;
+		// 严格多数（> 半数有效票）才能投出真凶。平票/并列最高票时无人获得严格多数，
+		// 此时按规则视为"未抓住真凶"，凶手阵营获胜。
 		const culpritVotedOut = topRole === script.truth.culprit && topCount > totalVotes / 2;
 		const winner = culpritVotedOut ? "innocents" : "culprit";
 
@@ -571,11 +578,7 @@ export class GameEngine {
 				usedInvestigation: engine.session.snapshot.usedInvestigation,
 				roleClues: engine.session.snapshot.roleClues,
 			}),
-			useInvestigation: () => {
-				if (engine.session.snapshot.usedInvestigation[role.id]) return false;
-				engine.session.snapshot.usedInvestigation[role.id] = true;
-				return true;
-			},
+			hasInvestigated: () => engine.session.snapshot.usedInvestigation[role.id] === true,
 			recordPublic: (partial) => engine.emitPublic(partial),
 			recordPrivate: (to, partial) => engine.emitPrivate(to, partial),
 			resolveInvestigation: (target) => engine.resolveInvestigation(role.id, target),
