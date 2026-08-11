@@ -65,6 +65,13 @@ npm run generate -- "题材描述" [玩家人数] [类型] [难度]   # CLI 生�
 			"api": "anthropic-messages",
 			"apiKey": "$ANTHROPIC_AUTH_TOKEN",
 			"models": [{ "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" }]
+		},
+		// 自定义 provider：ant-ling（OpenAI 兼容）
+		"ant-ling": {
+			"baseUrl": "https://api.ant-ling.com/v1",
+			"api": "openai-completions",
+			"apiKey": "$ANT_LING_API_KEY",
+			"models": [{ "id": "Ling-3.0-flash", "name": "Ling 3.0 Flash" }]
 		}
 	},
 	"roles": {
