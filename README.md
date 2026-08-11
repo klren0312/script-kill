@@ -29,8 +29,10 @@ src/
   server/sse.ts             SSE 客户端管理
 public/                     前端页面（index.html / room.html）
 scripts/generate-script.ts  CLI 生成剧本
+scripts/build.ts            打包构建（esbuild 内联依赖 → dist/，免装依赖部署）
 data/scripts/               生成的剧本 JSON（git 忽略）
 data/games/                 游戏会话快照（git 忽略）
+dist/                       构建产物（git 忽略，自包含可部署目录）
 ```
 
 ## 运行
@@ -44,6 +46,47 @@ npm run generate -- "题材描述" [玩家人数] [类型] [难度]   # CLI 生�
 ```
 
 开发约定（架构细节、配置/密钥规范、提交流程）见项目根 `CLAUDE.md`。
+
+## 打包部署（免装依赖）
+
+`npm run build` 把代码 + 全部依赖打成自包含的 `dist/` 目录，服务器不需要再 `npm install`：
+
+```bash
+npm run build     # 产物：dist/
+npm start         # 或本地直接跑源码
+npm run start:prod  # = node dist/index.js
+```
+
+`dist/` 结构：
+
+```
+dist/
+  index.js        服务器入口（esbuild 单文件 ESM，依赖全部内联）
+  generate.js     CLI 生成剧本入口（node dist/generate.js "题材"）
+  package.json    声明 ESM，node dist/index.js 可直接运行
+  config/         模型配置（含 .env.example 模板）
+  public/         前端页面
+  .agents/skills/ 生成用 skill
+  data/           运行期剧本与游戏快照（初始为空）
+```
+
+部署到服务器：
+
+```bash
+# 本地构建
+npm run build
+# 把整个 dist/ 拷贝到服务器，然后：
+cp dist/.env.example dist/.env   # 在 dist/.env 里填真实 API key（模板已随包带出）
+node dist/index.js               # 默认 http://127.0.0.1:3000，可用 PORT/HOST 覆盖
+node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
+```
+
+要点：
+
+- `dist/index.js` 已把 Node 依赖（fastify、pi-ai、pi-agent-core 等）全部打包内联，运行只需 Node ≥ 22.19，不读 `node_modules`。
+- 运行时目录由 `src/paths.ts` 自动定位：从 `index.js` 所在目录向上找 `config/models.json`，因此 `dist/` 放在任何路径都能自包含运行；也可用环境变量 `SCRIPT_KILL_ROOT` 显式指定根目录。
+- API key 只放 `dist/.env`（或服务器环境变量），随构建复制的 `.env.example` 只是空模板，`dist/` 里不会带密钥。
+- 已有剧本/游戏数据：把旧 `data/scripts/`、`data/games/` 拷进 `dist/data/` 对应目录即可。
 
 ## 模型配置
 

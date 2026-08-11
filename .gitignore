@@ -1,5 +1,6 @@
 node_modules/
 data/
+dist/
 *.tsbuildinfo
 
 # 密钥与本地环境
