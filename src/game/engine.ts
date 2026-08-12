@@ -204,6 +204,14 @@ export class GameEngine {
 		return lastAssistantText(this.session.narrator);
 	}
 
+	/** 使用主持人的模型对一段文本进行润色（不改变游戏状态）。 */
+	async polishText(text: string): Promise<string> {
+		const result = await this.narratorPrompt(
+			`你是一位文本润色助手。请润色以下文本，保持原意不变，使表达更流畅、更自然（适合剧本杀主持人口吻）。只返回润色后的文本，不要加任何解释或说明。\n\n${text}`,
+		);
+		return result || text;
+	}
+
 	private nextLocationClue(locationId: string): string | undefined {
 		const s = this.session;
 		const loc = s.script.locations.find((l) => l.id === locationId);

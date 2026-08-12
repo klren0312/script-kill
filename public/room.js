@@ -102,6 +102,19 @@ function handleEvent(ev) {
 		snapshot.winner = ev.winner;
 		snapshot.phase = "finished";
 	}
+	// 乐观更新替换检查：如果当前日志末尾是占位节点且与事件匹配，则替换。
+	let handled = false;
+	if (ev.scope === snapshot.humanRoleId) {
+		handled = tryReplaceOptimistic(ev, privateLog, "private");
+	}
+	if (ev.scope === "public" || !ev.scope) {
+		handled = tryReplaceOptimistic(ev, chatLog, "public");
+	}
+	if (handled) {
+		render();
+		return;
+	}
+	// 正常追加
 	if (ev.scope === "public" || !ev.scope) {
 		snapshot.publicEvents.push(ev);
 		appendPublic(ev);
@@ -194,6 +207,134 @@ function scrollBottom(el) {
 	el.scrollTop = el.scrollHeight;
 }
 
+// ---------- 乐观更新（加载反馈） ----------
+
+/** 尚未收到服务端确认的占位节点映射。键 = "类型:目标"，值 = DOM 节点 */
+const pendingOptimistic = new Map();
+
+function optimisticKey(type, target) {
+	return `${type}:${target}`;
+}
+
+function insertOptimisticPrivate(key, html) {
+	removeOptimistic(key);
+	const node = document.createElement("div");
+	node.className = "msg optimistic";
+	node.dataset.tempId = key;
+	node.innerHTML = html;
+	privateLog.appendChild(node);
+	pendingOptimistic.set(key, node);
+	scrollBottom(privateLog);
+}
+
+function insertOptimisticPublic(key, html) {
+	removeOptimistic(key);
+	const node = document.createElement("div");
+	node.className = "msg optimistic";
+	node.dataset.tempId = key;
+	node.innerHTML = html;
+	chatLog.appendChild(node);
+	pendingOptimistic.set(key, node);
+	scrollBottom(chatLog);
+}
+
+function removeOptimistic(key) {
+	const node = pendingOptimistic.get(key);
+	if (node) {
+		node.remove();
+		pendingOptimistic.delete(key);
+	}
+}
+
+/**
+ * 用真实事件替换乐观占位节点。当 SSE 到达时调用：
+ * 如果日志末尾是占位且与到达事件匹配 → 替换，否则返回 false（调用方需正常追加）。
+ */
+function tryReplaceOptimistic(ev, logEl) {
+	const last = logEl.lastElementChild;
+	if (!last || !last.classList.contains("optimistic")) return false;
+	const tempKey = last.dataset.tempId;
+	if (!tempKey) return false;
+	// 解析占位键：investigate:角色id 或 whisper:角色id 或 endTurn:
+	const parts = tempKey.split(":");
+	const type = parts[0];
+	const target = parts.slice(1).join(":");
+
+	let match = false;
+	if (type === "investigate" && ev.type === "investigate" && ev.target === target) {
+		match = true;
+	} else if (type === "whisper" && ev.type === "whisper" && ev.target === target) {
+		match = true;
+	} else if (type === "endTurn" && ev.type === "system" && /回合/.test(ev.text ?? "")) {
+		match = true;
+	}
+	if (!match) return false;
+
+	// 用真实内容替换占位
+	last.className = `msg ${ev.type}`;
+	last.removeAttribute("data-temp-id");
+	last.innerHTML = renderMessageContent(ev);
+	pendingOptimistic.delete(tempKey);
+	scrollBottom(logEl);
+	return true;
+}
+
+/** 根据事件类型生成消息 HTML（与 appendPublic / appendPrivate 的逻辑一致，但使用 markdown） */
+function renderMessageContent(ev) {
+	const who = esc(ev.roleName ?? (ev.type === "narrator" ? "主持人" : ""));
+	switch (ev.type) {
+		case "narrator":
+			return `<span class="who">主持人</span>${renderMarkdown(ev.text ?? "")}`;
+		case "speak":
+			return `<span class="who">${who}</span>${renderMarkdown(ev.text ?? "")}`;
+		case "show":
+			return `<span class="who">${who}</span>出示线索：${renderMarkdown(ev.text ?? "")}`;
+		case "vote":
+			return `${who} 已投票`;
+		case "turn":
+			return `→ ${who}${ev.humanTurn ? "（你）" : ""}`;
+		case "system":
+		case "game_end":
+			return renderMarkdown(ev.text ?? "");
+		default:
+			return renderMarkdown(ev.text ?? "");
+	}
+}
+
+function renderPrivateMessageContent(ev) {
+	const who = esc(ev.roleName ?? "");
+	switch (ev.type) {
+		case "whisper":
+			return `<span class="who">${who}</span>（私聊）${renderMarkdown(ev.text ?? "")}`;
+		case "investigate":
+			return `<span class="who">调查</span>${esc(ev.targetName ?? "")}：${renderMarkdown(ev.text ?? "")}`;
+		case "system":
+			return renderMarkdown(ev.text ?? "");
+		default:
+			return renderMarkdown(ev.text ?? "");
+	}
+}
+
+// ---------- Markdown 渲染 ----------
+
+/**
+ * 基础子集 Markdown 渲染器（与 esc 配合使用）。
+ * 支持：粗体 **text**、斜体 *text*、引用 > text
+ * 输出直接用于 innerHTML，所有非白名单标签均已 XSS 安全转义。
+ */
+function renderMarkdown(text) {
+	let result = esc(text);
+	// 粗体
+	result = result.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+	// 斜体（粗体替换后，剩余单 * 即为斜体）
+	result = result.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
+	// 引用行（> 开头）
+	result = result.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
+	return result;
+}
+
+// ----------追加消息（带 markdown） ----------
+
 function appendPublic(e) {
 	const node = document.createElement("div");
 	const mine = e.roleId && e.roleId === snapshot.humanRoleId;
@@ -201,18 +342,17 @@ function appendPublic(e) {
 	switch (e.type) {
 		case "narrator":
 			node.className = "msg narrator";
-			node.innerHTML = `<span class="who">主持人</span>${esc(e.text)}`;
+			node.innerHTML = `<span class="who">主持人</span>${renderMarkdown(e.text)}`;
 			break;
 		case "speak":
 			node.className = "msg speak" + (mine ? " my" : "");
-			node.innerHTML = `<span class="who">${esc(who)}</span>${esc(e.text)}`;
+			node.innerHTML = `<span class="who">${esc(who)}</span>${renderMarkdown(e.text)}`;
 			break;
 		case "show":
 			node.className = "msg show";
-			node.innerHTML = `<span class="who">${esc(who)}</span>出示线索：${esc(e.text)}`;
+			node.innerHTML = `<span class="who">${esc(who)}</span>出示线索：${renderMarkdown(e.text)}`;
 			break;
 		case "whisper":
-			// 公开流里不会出现
 			break;
 		case "vote":
 			node.className = "msg vote";
@@ -223,16 +363,13 @@ function appendPublic(e) {
 			node.innerHTML = `→ ${esc(who)}${e.humanTurn ? "（你）" : ""}`;
 			break;
 		case "system":
-			node.className = "msg system";
-			node.innerHTML = esc(e.text);
-			break;
 		case "game_end":
 			node.className = "msg system";
-			node.innerHTML = esc(e.text);
+			node.innerHTML = renderMarkdown(e.text ?? "");
 			break;
 		default:
 			node.className = "msg system";
-			node.innerHTML = esc(e.text ?? "");
+			node.innerHTML = renderMarkdown(e.text ?? "");
 	}
 	if (node.innerHTML) chatLog.appendChild(node);
 	scrollBottom(chatLog);
@@ -244,19 +381,19 @@ function appendPrivate(e) {
 	switch (e.type) {
 		case "whisper":
 			node.className = "msg whisper";
-			node.innerHTML = `<span class="who">${esc(who)}</span>（私聊）${esc(e.text)}`;
+			node.innerHTML = `<span class="who">${esc(who)}</span>（私聊）${renderMarkdown(e.text)}`;
 			break;
 		case "investigate":
 			node.className = "msg investigate";
-			node.innerHTML = `<span class="who">调查</span>${esc(e.targetName ?? "")}：${esc(e.text)}`;
+			node.innerHTML = `<span class="who">调查</span>${esc(e.targetName ?? "")}：${renderMarkdown(e.text)}`;
 			break;
 		case "system":
 			node.className = "msg system";
-			node.innerHTML = esc(e.text);
+			node.innerHTML = renderMarkdown(e.text ?? "");
 			break;
 		default:
 			node.className = "msg system";
-			node.innerHTML = esc(e.text ?? "");
+			node.innerHTML = renderMarkdown(e.text ?? "");
 	}
 	if (node.innerHTML) privateLog.appendChild(node);
 	scrollBottom(privateLog);
@@ -288,13 +425,19 @@ function renderActions() {
 			<div class="act-row">
 				<label>公开发言</label>
 				<textarea id="in-speak" rows="3"></textarea>
-				<button id="btn-speak">发言</button>
+				<div class="btn-row">
+					<button class="ghost" id="btn-polish-speak" title="AI 润色发言">✨ 润色</button>
+					<button id="btn-speak">发言</button>
+				</div>
 			</div>
 			<div class="act-row">
 				<label>私聊</label>
 				<select id="whisper-target"></select>
 				<input id="in-whisper" placeholder="私聊内容" />
-				<button id="btn-whisper">发送私聊</button>
+				<div class="btn-row">
+					<button class="ghost" id="btn-polish-whisper" title="AI 润色私聊内容">✨ 润色</button>
+					<button id="btn-whisper">发送私聊</button>
+				</div>
 			</div>
 			<div class="act-row">
 				<label>调查（每回合限一次）</label>
@@ -317,6 +460,8 @@ function renderActions() {
 		$("btn-speak").onclick = () => doSpeak();
 		$("btn-whisper").onclick = () => doWhisper();
 		$("btn-end").onclick = () => doEndTurn();
+		$("btn-polish-speak").onclick = () => doPolish("in-speak", "btn-polish-speak");
+		$("btn-polish-whisper").onclick = () => doPolish("in-whisper", "btn-polish-whisper");
 		// 调查目标
 		const grid = $("invest-grid");
 		grid.innerHTML = "";
@@ -369,6 +514,16 @@ function guard(fn) {
 		});
 }
 
+/** 设置/恢复按钮 loading 状态 */
+function buttonLoading(btnId, loading) {
+	const btn = $(btnId);
+	if (!btn) return;
+	btn.disabled = loading;
+	btn.textContent = loading ? "处理中…" : btn.dataset.originalText ?? btn.textContent;
+	if (loading) btn.dataset.originalText = btn.dataset.originalText ?? btn.textContent;
+	else delete btn.dataset.originalText;
+}
+
 async function doSpeak() {
 	const content = $("in-speak").value.trim();
 	if (!content) return alert("请输入发言内容");
@@ -390,6 +545,12 @@ async function doWhisper() {
 	const target = $("whisper-target").value;
 	const content = $("in-whisper").value.trim();
 	if (!content) return alert("请输入私聊内容");
+	// 乐观更新：立即显示私聊消息（发送中 → 真实内容）
+	const key = optimisticKey("whisper", target);
+	insertOptimisticPrivate(
+		key,
+		`<span class="who">我</span>（私聊）<em>（发送中…）</em>`,
+	);
 	try {
 		await guard(() =>
 			api(`/api/games/${gameId}/action`, {
@@ -401,10 +562,15 @@ async function doWhisper() {
 		$("in-whisper").value = "";
 	} catch (err) {
 		alert(err.message);
+		removeOptimistic(key);
 	}
 }
 
 async function doInvestigate(target) {
+	const key = optimisticKey("investigate", target);
+	const targetName = view.roles.find((r) => r.id === target)?.name ?? view.locations.find((l) => l.id === target)?.name ?? target;
+	// 乐观占位
+	insertOptimisticPrivate(key, `<span class="who">调查</span>${esc(targetName)}：<em>调查中…</em>`);
 	try {
 		await guard(() =>
 			api(`/api/games/${gameId}/action`, {
@@ -415,6 +581,7 @@ async function doInvestigate(target) {
 		);
 	} catch (err) {
 		alert(err.message);
+		removeOptimistic(key);
 	}
 }
 
@@ -433,6 +600,8 @@ async function doShow(clueId) {
 }
 
 async function doEndTurn() {
+	// 乐观更新：立即显示"结束回合中"系统消息
+	insertOptimisticPublic("endTurn:", `<span class="who">系统</span><em>回合结束中…</em>`);
 	try {
 		await guard(() =>
 			api(`/api/games/${gameId}/action`, {
@@ -443,6 +612,7 @@ async function doEndTurn() {
 		);
 	} catch (err) {
 		alert(err.message);
+		removeOptimistic("endTurn:");
 	}
 }
 
@@ -457,6 +627,32 @@ async function doVote(target) {
 		);
 	} catch (err) {
 		alert(err.message);
+	}
+}
+
+// ---------- AI 润色 ----------
+
+async function doPolish(textareaId, btnId) {
+	const textarea = $(textareaId);
+	const btn = $(btnId);
+	if (!textarea || !textarea.value.trim()) return;
+	const original = textarea.value;
+	btn.disabled = true;
+	btn.textContent = "润色中…";
+	try {
+		const res = await api(`/api/games/${gameId}/polish`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ text: original }),
+		});
+		if (res.polished) {
+			textarea.value = res.polished;
+		}
+	} catch (err) {
+		alert("润色失败：" + err.message);
+	} finally {
+		btn.disabled = false;
+		btn.textContent = "✨ 润色";
 	}
 }
 

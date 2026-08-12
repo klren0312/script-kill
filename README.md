@@ -45,6 +45,14 @@ dist/                       构建产物（git 忽略，自包含可部署目录
 - **响应式断点**：900px（单栏 + Tab 栏）、420px（收紧间距）、360px（Tab 栏图标换行）。
 - **对话框**：打开时锁定 body 滚动（iOS 兼容）；小屏对话框更贴近全屏。
 
+### 聊天交互增强（v0.x）
+
+- **AI 润色按钮**：发言框和私聊框旁各有 ✨ 润色按钮，点击后 AI 实时替换输入内容为更流畅、自然的表述（不改变原意）。
+- **调查加载反馈**：点击调查目标后，私密日志立即出现「调查中…」占位，等待服务端返回后自动替换为真实结果。
+- **结束回合反馈**：点击结束回合并立即出现「结束回合中…」系统提示 Sard，等待结果后自动更新。
+- **私聊即时反馈**：发送私聊后私密日志中立即显示「发送中…」，服务端返回后自动替换为最终内容。
+- **Markdown 渲染**：聊天消息支持基础 Markdown — `**粗体**`、`*斜体*`、`> 引用`，与 HTML 转义混合使用，保证 XSS 安全。
+
 ## 运行
 
 ```bash
@@ -170,3 +178,4 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 | POST | `/api/games/:id/resume` | 恢复中断的 AI 回合 |
 | POST | `/api/games/:id/action` | `{type: speak\|whisper\|investigate\|show\|endTurn, ...}` |
 | POST | `/api/games/:id/vote` | `{target: roleId\|null}` |
+| POST | `/api/games/:id/polish` | `{text: string}` → `{polished: string}`（AI 润色文本） |

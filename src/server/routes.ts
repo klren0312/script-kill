@@ -147,6 +147,20 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 		}
 	});
 
+	app.post("/api/games/:id/polish", async (req, reply) => {
+		const body = (req.body ?? {}) as { text?: string };
+		if (!body.text?.trim()) {
+			return reply.code(400).send({ error: "需要 text" });
+		}
+		try {
+			const engine = new GameEngine(getSession((req.params as { id: string }).id, deps));
+			const polished = await engine.polishText(body.text.trim());
+			return { polished };
+		} catch (e) {
+			return reply.code(400).send({ error: (e as Error).message });
+		}
+	});
+
 	// ---------- SSE ----------
 
 	app.get("/api/games/:id/events", async (req, reply) => {
