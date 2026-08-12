@@ -11,6 +11,7 @@
 		<h1>🎭 <span id="room-title">游戏房间</span></h1>
 		<div class="topbar-right">
 			<span id="phase-chip" class="chip"></span>
+			<button id="tour-replay" class="hidden" aria-label="重播游玩引导" title="重播游玩引导">?</button>
 			<a class="link" href="/">← 返回剧本库</a>
 		</div>
 	</header>
@@ -64,6 +65,28 @@
 		<div id="result-body"></div>
 		<button id="result-close">知道了</button>
 	</dialog>
+
+	<!-- Tour 游玩引导 -->
+	<div id="tour-overlay" class="hidden">
+		<div id="tour-highlight" class="tour-highlight hide"></div>
+		<div id="tour-tooltip" class="tour-tooltip">
+			<h3 id="tour-title"></h3>
+			<p id="tour-text"></p>
+			<div id="tour-dots"></div>
+			<div class="tour-btns">
+				<div class="tour-btns-left">
+					<button id="tour-prev" class="ghost">上一步</button>
+					<button id="tour-skip" class="ghost">跳过</button>
+				</div>
+				<div class="tour-btns-right">
+					<label class="tour-dont-show">
+						<input type="checkbox" id="tour-dont-show" /> 不再提示
+					</label>
+					<button id="tour-next">下一步</button>
+				</div>
+			</div>
+		</div>
+	</div>
 
 	<script type="module" src="/room.js"></script>
 </body>

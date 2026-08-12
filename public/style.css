@@ -363,3 +363,161 @@ body.dialog-open {
 	.script-card:active { border-color: var(--accent); }
 	.target-grid button:active { border-color: var(--accent); }
 }
+
+/* ============================================================
+   Tour 引导
+   ============================================================ */
+
+#tour-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.6);
+	z-index: 9000;
+	transition: opacity 0.25s;
+}
+#tour-overlay.hidden {
+	opacity: 0;
+	pointer-events: none;
+}
+
+#tour-highlight {
+	position: fixed;
+	border-radius: 12px;
+	box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	z-index: 9001;
+	pointer-events: none;
+	transition: left 0.3s, top 0.3s, width 0.3s, height 0.3s, opacity 0.2s;
+	opacity: 0;
+}
+#tour-highlight.visible {
+	opacity: 1;
+}
+#tour-highlight.hide {
+	opacity: 0 !important;
+}
+
+#tour-tooltip {
+	position: fixed;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 16px 18px;
+	max-width: 420px;
+	width: calc(100vw - 32px);
+	z-index: 9002;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+	transition: left 0.3s, top 0.3s;
+}
+#tour-tooltip h3 {
+	margin: 0 0 6px;
+	font-size: 15px;
+}
+#tour-tooltip p {
+	margin: 0 0 12px;
+	font-size: 13px;
+	color: var(--muted);
+	line-height: 1.55;
+}
+#tour-dots {
+	display: flex;
+	justify-content: center;
+	gap: 6px;
+	margin-bottom: 12px;
+}
+#tour-dots .dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--border);
+	transition: background 0.15s, transform 0.15s;
+}
+#tour-dots .dot.active {
+	background: var(--accent);
+	transform: scale(1.2);
+}
+.tour-btns {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	justify-content: space-between;
+	align-items: center;
+}
+.tour-btns-left,
+.tour-btns-right {
+	display: flex;
+	gap: 6px;
+}
+.tour-btns button {
+	min-height: 32px;
+	padding: 6px 12px;
+	font-size: 12px;
+}
+.tour-dont-show {
+	font-size: 11px;
+	color: var(--muted);
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+.tour-dont-show input {
+	accent-color: var(--accent);
+}
+
+/* 顶栏 "?" 重播引导按钮 */
+#tour-replay {
+	background: transparent;
+	border: 1px solid var(--border);
+	color: var(--muted);
+	font-size: 13px;
+	width: var(--tap);
+	height: var(--tap);
+	border-radius: 8px;
+	padding: 0;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+#tour-replay:hover {
+	color: var(--accent-2);
+	border-color: var(--accent-2);
+}
+
+/* 移动端：模态卡片模式，无聚光灯 */
+@media (max-width: 900px) {
+	#tour-highlight {
+		display: none !important;
+	}
+	#tour-overlay {
+		background: rgba(0, 0, 0, 0.75);
+	}
+	#tour-tooltip {
+		top: 50% !important;
+		left: 50% !important;
+		transform: translate(-50%, -50%);
+		max-width: calc(100vw - 40px);
+		width: 320px;
+	}
+}
+
+/* ============================================================
+   Tour 移动端触控优化
+   ============================================================ */
+@media (max-width: 420px) {
+	#tour-tooltip {
+		padding: 14px;
+	}
+	.tour-btns {
+		flex-direction: row;
+	}
+	.tour-btns button {
+		flex: 1;
+	}
+	.tour-dont-show {
+		flex: 0 0 auto;
+	}
+}

@@ -730,4 +730,247 @@ function initMobileTabs() {
 }
 
 initMobileTabs();
-load();
+
+// ---------- Tour 游玩引导 ----------
+
+const TOUR_STEPS = [
+	{
+		title: "🎭 欢迎加入剧本杀",
+		text: "你将扮演一名角色，与其他玩家一起推理案情、找出真凶。下面带你快速了解游戏流程与各区域。",
+		target: null,
+		position: "center",
+	},
+	{
+		title: "📋 这是你的角色",
+		text: "右侧面板显示你的公开设定、只有你知道的私密信息、目标和手中线索。私密信息不要主动泄露哦。",
+		target: "#role-panel",
+		position: "left",
+	},
+	{
+		title: "▶️ 开始游戏",
+		text: "读完角色设定后，点击「开始游戏」进入讨论阶段。主持人将介绍案发背景与开场情境。",
+		target: "#action-body",
+		position: "left",
+	},
+	{
+		title: "💬 讨论阶段",
+		text: "左侧聊天区是公开讨论，所有玩家都能看到。多轮讨论，每人每回合依次发言、调查或私聊。",
+		target: ".chat",
+		position: "right",
+	},
+	{
+		title: "⚔️ 行动面板",
+		text: "轮到你时可：公开发言、私聊某人、调查角色/地点（每回合限1次）、出示线索、结束回合。也可以让 AI 帮你润色。",
+		target: "#action-panel",
+		position: "left",
+	},
+	{
+		title: "🔍 私聊与调查结果",
+		text: "这里显示你与他人的私聊记录以及你主动调查的发现，只有你自己能看到。",
+		target: "[data-tab=\"private\"]",
+		position: "left",
+	},
+	{
+		title: "🗳️ 投票阶段",
+		text: "讨论结束后进入投票，秘密投出你认为的真凶（也可弃权）。只有严格多数票投出真凶，好人阵营才能获胜。",
+		target: "#action-body",
+		position: "left",
+	},
+	{
+		title: "🎉 揭晓真相",
+		text: "主持人将完整揭晓真凶、动机、手法与时间线。游戏结束！你可以返回剧本库继续挑战。",
+		target: "#phase-chip",
+		position: "below",
+	},
+];
+
+const TOUR_SEEN_KEY = "jubensha_tour_seen";
+
+const Tour = {
+	_active: false,
+	_step: 0,
+
+	init() {
+		const seen = tryGetStorage(TOUR_SEEN_KEY);
+		if (seen) {
+			showReplayButton();
+			return;
+		}
+		// 确保 snapshot 已加载（页面加载失败时不启动）
+		if (!snapshot) {
+			showReplayButton();
+			return;
+		}
+		// 等用户先看到页面再弹出引导
+		setTimeout(() => {
+			if (!snapshot) return;
+			Tour.start(0);
+		}, 800);
+	},
+
+	start(stepIndex) {
+		this._active = true;
+		this._step = stepIndex;
+		$("tour-dont-show").checked = false;
+		const overlay = $("tour-overlay");
+		overlay.classList.remove("hidden");
+		this.render();
+	},
+
+	render() {
+		const step = TOUR_STEPS[this._step];
+		$("tour-title").textContent = step.title;
+		$("tour-text").textContent = step.text;
+		// dots
+		const dotsEl = $("tour-dots");
+		dotsEl.innerHTML = "";
+		for (let i = 0; i < TOUR_STEPS.length; i++) {
+			const d = document.createElement("span");
+			d.className = "dot" + (i === this._step ? " active" : "");
+			dotsEl.appendChild(d);
+		}
+		// 按钮可见性
+		$("tour-prev").classList.toggle("hidden", this._step === 0);
+		$("tour-next").textContent = this._step === TOUR_STEPS.length - 1 ? "完成" : "下一步";
+
+		const highlight = $("tour-highlight");
+		const tooltip = $("tour-tooltip");
+		const isMobile = window.innerWidth <= 900;
+
+		if (step.target && !isMobile) {
+			const el = document.querySelector(step.target);
+			if (el) {
+				const r = el.getBoundingClientRect();
+				highlight.style.left = (r.left - 4) + "px";
+				highlight.style.top = (r.top - 4) + "px";
+				highlight.style.width = (r.width + 8) + "px";
+				highlight.style.height = (r.height + 8) + "px";
+				highlight.classList.remove("hide");
+				setTimeout(() => highlight.classList.add("visible"), 10);
+
+				positionTooltip(tooltip, step.position, r);
+			} else {
+				highlight.classList.add("hide");
+				highlight.classList.remove("visible");
+				positionTooltip(tooltip, "below", { left: 20, top: 60, right: window.innerWidth - 20, bottom: 60, width: window.innerWidth - 40, height: 200 });
+			}
+		} else {
+			highlight.classList.add("hide");
+			highlight.classList.remove("visible");
+			// 居中（欢迎步骤或移动端）
+			const tw = 420;
+			const th = 220;
+			tooltip.style.left = ((window.innerWidth - tw) / 2) + "px";
+			tooltip.style.top = ((window.innerHeight - th) / 2) + "px";
+		}
+	},
+
+	next() {
+		if (this._step < TOUR_STEPS.length - 1) {
+			this._step++;
+			this.render();
+		} else {
+			this.end();
+		}
+	},
+
+	prev() {
+		if (this._step > 0) {
+			this._step--;
+			this.render();
+		}
+	},
+
+	end() {
+		this._active = false;
+		const overlay = $("tour-overlay");
+		overlay.classList.add("hidden");
+		// 任意关闭都标记为已见过，避免每次进入新房间都弹出
+		trySetStorage(TOUR_SEEN_KEY, "1");
+		showReplayButton();
+	},
+};
+
+function positionTooltip(tooltip, position, targetRect) {
+	const pad = 12;
+	const gap = 16;
+	// 先设置一个宽度以获取 tooltip 尺寸
+	tooltip.style.left = "0px";
+	tooltip.style.top = "0px";
+	const tw = tooltip.offsetWidth;
+	const th = tooltip.offsetHeight;
+	const vw = window.innerWidth;
+	const vh = window.innerHeight;
+
+	let left, top;
+	switch (position) {
+		case "above":
+			left = targetRect.left;
+			top = targetRect.top - th - gap;
+			break;
+		case "below":
+			left = targetRect.left;
+			top = targetRect.bottom + gap;
+			break;
+		case "left":
+			left = targetRect.left - tw - gap;
+			top = targetRect.top;
+			break;
+		case "right":
+			left = targetRect.right + gap;
+			top = targetRect.top;
+			break;
+		case "center":
+		default:
+			left = (vw - tw) / 2;
+			top = (vh - th) / 2;
+			break;
+	}
+
+	// 边界检测
+	if (left < pad) left = pad;
+	if (left + tw > vw - pad) left = vw - tw - pad;
+	if (top < pad) top = pad;
+	if (top + th > vh - pad) top = vh - th - pad;
+
+	tooltip.style.left = left + "px";
+	tooltip.style.top = top + "px";
+}
+
+function trySetStorage(key, val) {
+	try { localStorage.setItem(key, val); } catch { /* 隐私模式忽略 */ }
+}
+function tryGetStorage(key) {
+	try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function showReplayButton() {
+	$("tour-replay").classList.remove("hidden");
+}
+
+// 按钮事件
+$("tour-prev").onclick = (e) => { e.stopPropagation(); Tour.prev(); };
+$("tour-next").onclick = (e) => { e.stopPropagation(); Tour.next(); };
+$("tour-skip").onclick = (e) => { e.stopPropagation(); Tour.end(); };
+$("tour-replay").onclick = () => {
+	Tour.start(0);
+};
+// 点击遮罩背景关闭
+$("tour-overlay").onclick = (e) => {
+	if (e.target.id === "tour-overlay") Tour.end();
+};
+// Escape 关闭
+document.addEventListener("keydown", (e) => {
+	if (e.key === "Escape" && Tour._active) Tour.end();
+});
+
+// 页面滚动/窗口尺寸变化时重新定位（仅当 Tour 活跃时）
+window.addEventListener("resize", () => {
+	if (Tour._active) Tour.render();
+});
+document.addEventListener("scroll", () => {
+	if (Tour._active) Tour.render();
+});
+
+// 启动加载
+load().then(() => Tour.init());
