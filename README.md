@@ -103,13 +103,31 @@ dist/
 部署到服务器：
 
 ```bash
-# 本地构建
+# 一键部署（build → zip → scp → 服务器解压，data/ 自动保留）
+./scripts/deploy.sh
+
+# 自定义服务器 / 目标目录
+SERVER=root@your-server REMOTE_DEST=my-app ./scripts/deploy.sh
+
+# 或手动分步
 npm run build
 # 把整个 dist/ 拷贝到服务器，然后：
 cp dist/.env.example dist/.env   # 在 dist/.env 里填真实 API key（模板已随包带出）
 node dist/index.js               # 默认 http://127.0.0.1:3000，可用 PORT/HOST 覆盖
 node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 ```
+
+**一键部署说明**（`scripts/deploy.sh`）：
+
+1. 执行 `npm run build` 生成 `dist/`
+2. 打包为 `dist.zip`，**自动排除 `dist/data/`**（本地构建的 data/ 是空目录，不含实际数据）
+3. `scp dist.zip root@106.75.247.193:~` 上传到服务器
+4. 服务器端：备份 `~/script-kill/dist/data/` → 解压覆盖 `~/script-kill/` → 恢复 data/
+5. 部署完成后自动清理临时文件
+
+> 通过环境变量可覆盖默认值：`SERVER`（默认 `root@106.75.247.193`）、`REMOTE_DEST`（默认 `script-kill`）。
+
+**注意**：首次部署后，在服务器上配置 `~/script-kill/dist/.env`（复制 `dist/.env.example` 并填入真实 API key），后续部署不会覆盖 `dist/data/` 和 `dist/.env`（`.env` 不在构建产物中，不会被覆盖）。
 
 要点：
 
