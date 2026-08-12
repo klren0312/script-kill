@@ -117,7 +117,7 @@ node dist/index.js               # 默认 http://127.0.0.1:3000，可用 PORT/HO
 node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 ```
 
-**一键部署说明**（`scripts/deploy.sh`）：
+**一键部署说明**（`scripts/deploy.ts`，`tsx scripts/deploy.ts`）：
 
 1. 执行 `npm run build` 生成 `dist/`
 2. 打包为 `dist.zip`，**自动排除 `dist/data/`**（本地构建的 data/ 是空目录，不含实际数据）
