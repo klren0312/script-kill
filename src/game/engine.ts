@@ -3,7 +3,7 @@ import type { Agent } from "@earendil-works/pi-agent-core";
 import type { Model, ThinkingLevel } from "@earendil-works/pi-ai";
 import type { Role, Script } from "../domain/schema.js";
 import { resolveClueText } from "../domain/script-library.js";
-import { createAgentFactory, lastAssistantText } from "../agents/factory.js";
+import { createAgentFactory, lastAssistantText, agentCalledTool } from "../agents/factory.js";
 import { buildLeakInfo, buildNarratorPrompt, leakCheck, maskLeaks, type LeakInfo } from "./narrator.js";
 import { createRoleTools, type ToolHost } from "./tools.js";
 import type { EngineDeps, GameEvent, GameSession, Phase } from "./types.js";
@@ -432,7 +432,7 @@ export class GameEngine {
 				`这是第 ${s.snapshot.round} 轮讨论。轮到你（${role.name}）行动。你可以：用 speak 公开发言；用 whisper 与某人私聊；用 investigate 调查（每人每回合限 1 次）；用 show 出示线索。请发言或行动。`,
 			);
 			const text = lastAssistantText(agent);
-			if (!this.turnSpoke && text.trim()) {
+			if (!this.turnSpoke && !agentCalledTool(agent) && text.trim()) {
 				this.performSpeak(roleId, text);
 			}
 		} catch (e) {

@@ -159,6 +159,7 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 `setup → reading → discussion（多轮，每人每轮 1 次调查）→ voting → reveal`
 
 - 真相与所有地点/公共线索只进入主持人的 prompt；每个角色的私密信息只进入该角色自己的 prompt。
+- AI 角色用 `speak` 工具公开发言，工具的 `content` 参数即为唯一入记录的台词；模型 tool 调用后附带的旁白/策略备注（"心声"）不进入公开记录。
 - 主持人在揭晓前被硬性过滤：`leakCheck` 命中真凶名或手法词时自动改写。
 - 投票：严格多数（> 半数有效票）投出真凶则好人获胜；平票视为未抓住真凶，凶手获胜。
 - 每步操作后快照持久化到 `data/games/`，服务重启后可恢复并继续（`POST /api/games/:id/resume`）。
