@@ -1,11 +1,14 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+import fastifyWebsocket from "@fastify/websocket";
 import { publicDir } from "../paths.js";
 import { routes } from "./routes.js";
 import type { GameDeps } from "./games.js";
 
 export async function buildServer(deps: GameDeps) {
 	const app = Fastify({ logger: true, bodyLimit: 4 * 1024 * 1024 });
+
+	await app.register(fastifyWebsocket);
 
 	await app.register(routes, { deps });
 

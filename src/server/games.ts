@@ -5,6 +5,7 @@ import { getScript, humanRoleView } from "../domain/script-library.js";
 import { GameEngine } from "../game/engine.js";
 import { listGames, loadGame, saveGame } from "../game/snapshots.js";
 import { sseHub } from "./sse.js";
+import { wsHub } from "./ws.js";
 
 export interface GameDeps {
 	models: MutableModels;
@@ -54,6 +55,7 @@ export function createGame(
 			(e) => {
 				if (e.scope === "public" || e.scope === humanRoleId) {
 					sseHub.broadcast(gameIdRef.value, e);
+					wsHub.broadcast(gameIdRef.value, e, humanRoleId);
 				}
 			},
 			() => saveGame(session.snapshot),
@@ -83,6 +85,7 @@ export function getSession(gameId: string, deps: GameDeps): GameSession {
 			(e) => {
 				if (e.scope === "public" || e.scope === humanRoleId) {
 					sseHub.broadcast(gameId, e);
+					wsHub.broadcast(gameId, e, humanRoleId);
 				}
 			},
 			() => saveGame(session.snapshot),

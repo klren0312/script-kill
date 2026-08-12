@@ -6,6 +6,7 @@ import { GameEngine } from "../game/engine.js";
 import type { GameEvent } from "../game/types.js";
 import { createGame, getSession, listGamesView, publicSnapshot, type GameDeps } from "./games.js";
 import { sseHub } from "./sse.js";
+import { wsHub } from "./ws.js";
 
 interface RouteOpts {
 	deps: GameDeps;
@@ -177,4 +178,33 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 		reply.raw.write(`data: ${JSON.stringify({ type: "snapshot", snapshot: publicSnapshot(session) })}\n\n`);
 		sseHub.subscribe(id, reply);
 	});
+
+	// ---------- WebSocket（供小程序等非 SSE 客户端使用）----------
+
+	app.get<{ Params: { id: string }; Querystring: { roleId?: string } }>(
+		"/ws/games/:id",
+		{ websocket: true },
+		(socket, req) => {
+			const id = req.params.id;
+			const humanRoleId = req.query.roleId;
+			if (!humanRoleId) {
+				socket.end();
+				return;
+			}
+			try {
+				const session = getSession(id, deps);
+				try {
+					socket.send(JSON.stringify({
+						type: "snapshot",
+						snapshot: publicSnapshot(session),
+					}));
+				} catch {
+					return;
+				}
+				wsHub.subscribe(id, socket);
+			} catch {
+				socket.end();
+			}
+		},
+	);
 }

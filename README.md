@@ -4,7 +4,7 @@
 
 - **生成**：用 `@earendil-works/pi-agent-core` 的 Agent + `.agents/skills/jubensha-gen/SKILL.md` skill，由大模型生成符合 JSON Schema 的完整剧本，自动校验、重试、入库。
 - **游玩**：玩家挑选剧本 → 选择自己要扮演的角色 → 其余角色交给独立 Agent（每人一个 `Agent`，自带私有设定与工具）。主持人（DM）由独立 Agent 担任，掌控真相并推进流程。
-- **协议**：Fastify REST + SSE；前端为无框架的两页（剧本库 / 房间）。
+- **协议**：Fastify REST + SSE + WebSocket；SSE 供 Web 端（浏览器原生 `EventSource`），WebSocket 供小程序等非 SSE 客户端。
 
 ## 架构
 
@@ -27,6 +27,7 @@ src/
   server/routes.ts          REST + SSE 路由
   server/games.ts           会话注册表 + 玩家视角公开快照
   server/sse.ts             SSE 客户端管理
+  server/ws.ts             WebSocket 客户端管理（供小程序）
 public/                     前端页面（index.html / room.html）
 scripts/generate-script.ts  CLI 生成剧本
 scripts/build.ts            打包构建（esbuild 内联依赖 → dist/，免装依赖部署）
@@ -180,3 +181,62 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 | POST | `/api/games/:id/action` | `{type: speak\|whisper\|investigate\|show\|endTurn, ...}` |
 | POST | `/api/games/:id/vote` | `{target: roleId\|null}` |
 | POST | `/api/games/:id/polish` | `{text: string}` → `{polished: string}`（AI 润色文本） |
+| WS | `/ws/games/:id?roleId=xxx` | WebSocket 事件推送（供小程序，下行帧与 SSE 同构） |
+
+## WebSocket（小程序对接）
+
+Web 端用 SSE（浏览器原生 `EventSource`），但微信小程序等无法对接 SSE，因此提供 WebSocket 端点。SSE 与 WS 双传输并存，互不干扰。
+
+**连接**
+
+```
+ws://<host>:<port>/ws/games/:gameId?roleId=<humanRoleId>
+```
+
+- `gameId`：通过 `POST /api/games` 建局后拿到的 `id`。
+- `roleId`：query 参数，必填。用于私密事件过滤（只推 public 事件 + 发给该玩家的私密事件）。缺省则服务端立即断开连接。
+- 小程序用 `wx.connectSocket({ url })`，无 cookie 场景下所有上下文走 URL。
+
+**下行帧（与 SSE 完全同构）**
+
+连接建立后服务端**立即推送一条 `snapshot` 帧**，格式与 SSE 的 `data:` 行一致，便于重连/刷新恢复界面：
+
+```json
+{ "type": "snapshot", "snapshot": { /* PublicSnapshot */ } }
+```
+
+之后收到的帧与 SSE 事件一一对应，`type` 取值：
+
+| type | 说明 |
+| --- | --- |
+| `phase` | 阶段切换 |
+| `turn` | 回合切换 |
+| `speak` | 公开发言 |
+| `whisper` | 私聊（私密） |
+| `investigate` | 调查（私密） |
+| `show` | 出示线索 |
+| `vote` | 投票 |
+| `narrator` | 主持人旁白 |
+| `system` | 系统提示 |
+| `game_end` | 揭晓结果 |
+
+客户端按 `ev.type` 分发即可，与 `room.html` 的 `handleEvent` 逻辑一致。
+
+**动作用于 HTTP（不走 WS）**
+
+发言、私聊、调查、投票、润色等动作仍走 `POST /api/games/:id/action`、`/vote`、`/polish` 等 HTTP 路由（复用鉴权、校验、串行化、快照持久化）。WS 仅负责事件下行推送。
+
+**重连与恢复**
+
+小程序 `wx.connectSocket` 无自动重连，需自行实现：
+
+1. 监听 `onClose` / `onError`，断线后循环 `connectSocket`。
+2. 重连成功后服务端会再次推送 `snapshot` 帧，客户端拿到后全量重建界面（`rebuildLogs()`），无需服务端缓存 missed events。
+
+**作用域说明**
+
+WS 按 game 分桶（与 SSE 一致），过滤在 `broadcast` 内部完成：仅 `scope === "public"` 或 `scope === humanRoleId` 的事件被推送。其余私密事件（其他 AI 角色之间的私聊、其他人的调查）不会被发送。
+
+## 架构（含 WS）
+
+`src/server/ws.ts` — `WsHub`，结构镜像 `SseHub`，管理 WebSocket 连接集合并按 game 分桶广播。`@fastify/websocket` 插件挂载在 Fastify 实例上，WS 路由定义在 `routes.ts`。游戏引擎 `GameEngine` 与 `EventType` 等对传输层无感知，`onEvent` 回调同时 fan-out 到 SSE 和 WS。
