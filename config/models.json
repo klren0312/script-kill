@@ -46,15 +46,15 @@
 			"apiKey": "$SENSENOVA_API_KEY",
 			"models": [
 				{
-					"id": "sensenova-6.7-flash-lite",
-					"name": "SenseNova 6.7 Flash Lite"
+					"id": "sensenova-6.8-flash-lite",
+					"name": "SenseNova 6.8 Flash Lite"
 				}
 			]
 		}
 	},
 	"roles": {
 		"generator": { "provider": "ant-ling", "model": "Ling-3.0-flash", "thinkingLevel": "high" },
-		"narrator": { "provider": "sensenova", "model": "sensenova-6.7-flash-lite", "thinkingLevel": "medium" },
+		"narrator": { "provider": "sensenova", "model": "sensenova-6.8-flash-lite", "thinkingLevel": "medium" },
 		"player": { "provider": "openrouter", "model": "openrouter/free", "thinkingLevel": "medium" }
 	}
 }
