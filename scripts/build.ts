@@ -59,6 +59,11 @@ for (const dir of ["config", "public", "skills"]) {
 	cpSync(resolve(appRoot, dir), resolve(dist, dir), { recursive: true });
 }
 cpSync(resolve(appRoot, ".env.example"), resolve(dist, ".env.example"), { force: true });
+// 若存在 .env（含真实 API key），复制到产物中，服务器部署后直接使用
+if (existsSync(resolve(appRoot, ".env"))) {
+	cpSync(resolve(appRoot, ".env"), resolve(dist, ".env"), { force: true });
+	console.log("[build] 已复制 .env 到 dist/");
+}
 
 // SQLite session backend 在运行时按 import.meta.url 读取迁移 SQL：esbuild 不会内联 .sql 文件，
 // 打包后位于 dist/index.js 旁，故复制到 dist/migrations/（与 bundle 内 new URL("./migrations/...") 对齐）。

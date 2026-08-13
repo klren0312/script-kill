@@ -98,7 +98,9 @@ dist/
   index.js        服务器入口（esbuild 单文件 ESM，依赖全部内联）
   generate.js     CLI 生成剧本入口（node dist/generate.js "题材"）
   package.json    声明 ESM，node dist/index.js 可直接运行
-  config/         模型配置（含 .env.example 模板）
+  .env            API key 配置（构建时从项目根 .env 复制，部署后直接使用）
+  .env.example    API key 模板（空值参考）
+  config/         模型配置
   public/         前端页面
   skills/         生成用 skill
   migrations/     SQLite 迁移 SQL（运行时加载建表）
@@ -117,7 +119,6 @@ SERVER=root@your-server REMOTE_DEST=my-app ./scripts/deploy.sh
 # 或手动分步
 npm run build
 # 把整个 dist/ 拷贝到服务器，然后：
-cp dist/.env.example dist/.env   # 在 dist/.env 里填真实 API key（模板已随包带出）
 node dist/index.js               # 默认 http://127.0.0.1:3000，可用 PORT/HOST 覆盖
 node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 ```
@@ -132,7 +133,7 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 
 > 通过环境变量可覆盖默认值：`SERVER`（默认 `root@106.75.247.193`）、`REMOTE_DEST`（默认 `script-kill`）。
 
-**注意**：首次部署后，在服务器上配置 `~/script-kill/dist/.env`（复制 `dist/.env.example` 并填入真实 API key），后续部署不会覆盖 `dist/data/` 和 `dist/.env`（`.env` 不在构建产物中，不会被覆盖）。
+**注意**：`.env` 会在构建时自动复制到 `dist/`，随部署一起上传到服务器。因此需确保项目根的 `.env` 已填入真实 API key 后再执行部署。后续部署会覆盖 `dist/.env`——若服务器侧单独改了 `.env`，下次部署会还原。如需在服务器侧独立管理 `.env`，可将其从部署脚本的排除列表加入。`dist/data/` 则不会被覆盖。
 
 要点：
 
