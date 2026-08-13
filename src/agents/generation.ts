@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { skillsDir } from "../paths.js";
 import { validateScript, type Script } from "../domain/schema.js";
-import { createAgentFactory, lastAssistantText, type AgentFactory } from "./factory.js";
+import { lastAssistantText, type AgentFactory } from "./factory.js";
 import type { ResolvedModel } from "../config/models.js";
 
 export interface GenerationRequest {

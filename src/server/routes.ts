@@ -3,7 +3,6 @@ import { createAgentFactory } from "../agents/factory.js";
 import { generateScript } from "../agents/generation.js";
 import { getScript, humanRoleView, listScripts, saveScript, scriptCard, scriptSelectView } from "../domain/script-library.js";
 import { GameEngine } from "../game/engine.js";
-import type { GameEvent } from "../game/types.js";
 import { createGame, getSession, listGamesView, publicSnapshot, type GameDeps } from "./games.js";
 import { sseHub } from "./sse.js";
 import { wsHub } from "./ws.js";
