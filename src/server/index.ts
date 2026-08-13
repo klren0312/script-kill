@@ -1,12 +1,21 @@
 import Fastify from "fastify";
+import fastifyCors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import { publicDir } from "../paths.js";
+import { corsOriginOption } from "./cors.js";
 import { routes } from "./routes.js";
 import type { GameDeps } from "./games.js";
 
 export async function buildServer(deps: GameDeps) {
 	const app = Fastify({ logger: true, bodyLimit: 4 * 1024 * 1024 });
+
+	// 跨域处理：需在路由注册前加载，预检（OPTIONS）与正式请求都会带上 CORS 响应头。
+	await app.register(fastifyCors, {
+		origin: corsOriginOption(),
+		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+		credentials: true,
+	});
 
 	await app.register(fastifyWebsocket);
 

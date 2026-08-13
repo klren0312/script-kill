@@ -6,6 +6,7 @@ import { GameEngine } from "../game/engine.js";
 import { createGame, getSession, listGamesView, publicSnapshot, type GameDeps } from "./games.js";
 import { sseHub } from "./sse.js";
 import { wsHub } from "./ws.js";
+import { corsHeadersFor, isOriginAllowed } from "./cors.js";
 
 interface RouteOpts {
 	deps: GameDeps;
@@ -165,12 +166,18 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 
 	app.get("/api/games/:id/events", async (req, reply) => {
 		const id = (req.params as { id: string }).id;
+		// SSE 走 reply.hijack() 绕过 Fastify 生命周期，@fastify/cors 的头不会自动附加，
+		// 这里手动校验来源并写入 CORS 头。
+		if (!isOriginAllowed(req.headers.origin)) {
+			return reply.code(403).send({ error: "来源不被允许（CORS）" });
+		}
 		const session = await getSession(id, deps);
 		reply.hijack();
 		reply.raw.writeHead(200, {
 			"Content-Type": "text/event-stream",
 			"Cache-Control": "no-cache, no-transform",
 			Connection: "keep-alive",
+			...corsHeadersFor(req.headers.origin),
 		});
 		reply.raw.write("retry: 1000\n\n");
 		// 连接建立后先推送一次当前公开快照，便于重连/刷新恢复界面
