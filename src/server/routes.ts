@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { createAgentFactory } from "../agents/factory.js";
 import { generateScript } from "../agents/generation.js";
 import { getScript, humanRoleView, listScripts, saveScript, scriptCard, scriptSelectView } from "../domain/script-library.js";

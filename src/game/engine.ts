@@ -1,6 +1,5 @@
 import { uuidv7 } from "@earendil-works/pi-agent-core";
 import type { Agent } from "@earendil-works/pi-agent-core";
-import type { Model, ThinkingLevel } from "@earendil-works/pi-ai";
 import type { Role, Script } from "../domain/schema.js";
 import { resolveClueText } from "../domain/script-library.js";
 import { createAgentFactory, lastAssistantText, agentCalledTool } from "../agents/factory.js";
