@@ -24,7 +24,7 @@ const script = await generateScript(
 	},
 	factory,
 	gen,
-	{ optimize: true }, // 生成后用 .agents/skills 里 story 系列 skill 审稿/去AI味/打磨
+	{ optimize: true }, // 生成后用 skills/ 里 story 系列 skill 审稿/去AI味/打磨
 );
 
 saveScript(script);

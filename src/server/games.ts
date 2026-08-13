@@ -3,7 +3,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { EngineDeps, GameEvent, GameSession, PublicSnapshot } from "../game/types.js";
 import { getScript, humanRoleView } from "../domain/script-library.js";
 import { GameEngine } from "../game/engine.js";
-import { listGames, loadGame, saveGame } from "../game/snapshots.js";
+import { createGameStore, listGames, loadGame, saveGame, type GameStore } from "../game/store.js";
 import { sseHub } from "./sse.js";
 import { wsHub } from "./ws.js";
 
@@ -34,13 +34,20 @@ export function toEngineDeps(
 	};
 }
 
+/** 持久化实现：写入 SQLite 存储（fire-and-forget，错误只记录不抛出）。 */
+function persistGame(gameId: string, store: GameStore, getSnapshot: () => GameSession["snapshot"]): void {
+	void saveGame(store, getSnapshot()).catch((e) => {
+		console.error(`[game:${gameId}] 持久化失败`, e);
+	});
+}
+
 const sessions = new Map<string, GameSession>();
 
-export function createGame(
+export async function createGame(
 	scriptId: string,
 	humanRoleId: string,
 	deps: GameDeps,
-): { gameId: string; humanRole: ReturnType<typeof humanRoleView> } {
+): Promise<{ gameId: string; humanRole: ReturnType<typeof humanRoleView> }> {
 	const script = getScript(scriptId);
 	if (!script) throw new Error(`剧本 ${scriptId} 不存在`);
 	if (!script.roles.some((r) => r.id === humanRoleId)) {
@@ -58,22 +65,24 @@ export function createGame(
 					wsHub.broadcast(gameIdRef.value, e, humanRoleId);
 				}
 			},
-			() => saveGame(session.snapshot),
+			() => persistGame(gameIdRef.value, store, () => session.snapshot),
 		),
 	);
 	const gameId = session.snapshot.id;
 	gameIdRef.value = gameId;
+	// 先建持久层 session 并写入初始快照，之后引擎的每次 touch 才可落盘。
+	const store = await createGameStore(session.snapshot);
 	sessions.set(gameId, session);
-	session.deps.persist();
 	return { gameId, humanRole: humanRoleView(script, humanRoleId) };
 }
 
-/** 取游戏会话：内存中有则复用，否则从磁盘快照恢复。 */
-export function getSession(gameId: string, deps: GameDeps): GameSession {
+/** 取游戏会话：内存中有则复用，否则从 SQLite（回退旧 JSON）恢复。 */
+export async function getSession(gameId: string, deps: GameDeps): Promise<GameSession> {
 	const existing = sessions.get(gameId);
 	if (existing) return existing;
-	const snap = loadGame(gameId);
-	if (!snap) throw new Error(`游戏 ${gameId} 不存在`);
+	const loaded = await loadGame(gameId);
+	if (!loaded) throw new Error(`游戏 ${gameId} 不存在`);
+	const snap = loaded.snapshot;
 	const script = getScript(snap.scriptId);
 	if (!script) throw new Error(`剧本 ${snap.scriptId} 不存在`);
 	const humanRoleId = snap.humanRoleId;
@@ -88,14 +97,16 @@ export function getSession(gameId: string, deps: GameDeps): GameSession {
 					wsHub.broadcast(gameId, e, humanRoleId);
 				}
 			},
-			() => saveGame(session.snapshot),
+			() => persistGame(gameId, store, () => session.snapshot),
 		),
 	);
+	// 旧版 JSON 恢复的游戏尚无 SQLite session：首次恢复即迁移。
+	const store = loaded.store ?? (await createGameStore(snap));
 	sessions.set(gameId, session);
 	return session;
 }
 
-export function listGamesView(): { id: string; scriptId: string; phase: string; updatedAt: number }[] {
+export async function listGamesView(): Promise<{ id: string; scriptId: string; phase: string; updatedAt: number }[]> {
 	return listGames();
 }
 

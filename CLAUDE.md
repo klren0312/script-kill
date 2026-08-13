@@ -3,7 +3,7 @@
 剧本杀生成 + 单机游玩系统，`D:\1project\pi\apps\script-kill`。
 
 - **独立项目**：有自己的 git 仓库（`apps/script-kill/.git`，分支 `main`），不引用外部 pi 项目路径。`src/paths.ts` 全部是项目内路径。
-- **内核**：`@earendil-works/pi-agent-core`（Agent）+ `@earendil-works/pi-ai`（模型/provider）+ Fastify（后端 REST + SSE）。
+- **内核**：`@earendil-works/pi-agent-core`（Agent）+ `@earendil-works/pi-ai`（模型/provider）+ `@earendil-works/pi-session-backend-sqlite-node`（游戏持久化）+ Fastify（后端 REST + SSE）。
 - **生成**：`jubensha-gen` skill + 大模型产出符合 JSON Schema 的剧本，自动校验重试入库。
 - **游玩**：人类玩家选一角色，其余角色各一个独立 Agent，主持人（DM）一个独立 Agent 掌控真相。
 
@@ -23,19 +23,19 @@ config/models.json          模型配置（provider / 角色用模型）
 .env                        API key（git 忽略，勿提交）；模板见 .env.example
 src/
   index.ts                  入口：加载配置 → 构建模型注册表 → 启动服务
-  paths.ts                  项目内路径（appRoot/data/.agents/config/public）
+  paths.ts                  项目内路径（appRoot/data/skills/config/public）
   config/env.ts             .env 加载器（幂等，OS 环境变量优先，不覆盖）
   config/models.ts          配置加载：interpolateKey 支持 字面量/$ENV_VAR/!command
   domain/schema.ts          剧本 JSON Schema（TypeBox）与纯结构校验
   domain/script-library.ts  剧本库存取 + 选角安全视图（过滤 secret/线索/真相）
   agents/factory.ts         Agent 工厂（封装 pi-agent-core 构造）
   agents/generation.ts      生成服务 + story-skill 优化（合并回填）
-  game/{types,narrator,tools,engine,snapshots}.ts  游戏引擎/主持/工具/快照
+  game/{types,narrator,tools,engine,store}.ts  游戏引擎/主持/工具/SQLite 持久层
   server/{index,routes,games,sse}.ts               Fastify 路由 + SSE
 public/                     前端（index.html 剧本库 / room.html 房间）
 scripts/generate-script.ts  CLI 生成
-data/scripts/  data/games/  生成的剧本/会话快照（git 忽略）
-.agents/skills/             skill：jubensha-gen + story-review/deslop/short-write/long-write
+data/scripts/  data/games/  生成的剧本 / 游戏库 sessions.sqlite + 旧快照 JSON（git 忽略）
+skills/                   skill：jubensha-gen + story-review/deslop/short-write/long-write
 ```
 
 ## 关键约定（踩过的坑，务必遵守）
@@ -54,11 +54,13 @@ data/scripts/  data/games/  生成的剧本/会话快照（git 忽略）
    - Node 的 `/tmp` 在 Windows 解析为 `D:\tmp`（可能不存在），临时文件放项目内（如 `data/`）。
    - bash 会吃掉 PowerShell 里的 `$_`；杀进程用 `tasklist`/`netstat` 或 `taskkill //F //PID`。
    - `tsx watch` 改文件重启可能 EADDRINUSE：先 `taskkill //F //PID <占端口进程>` 再重启。
-9. **git 仓库在项目根**（`apps/script-kill/.git`），提交时在此目录执行；外部 pi 仓库的 `.gitignore` 有 `apps/*` 不会跟踪它。
+9. **游戏持久化走 SQLite session backend，不要自写文件**：`src/game/store.ts` 用 `@earendil-works/pi-session-backend-sqlite-node`，一个游戏 = 一个 session，快照以 `appendCustomEntry` 追加（append-only，最新一条即当前状态）。注意：writer lease 是跨进程单写者保护（TTL 30s），停服后立即重启可能报 `already has an active writer`，等租约过期即可；payload 校验拒绝 `undefined` 值，存快照前先 JSON round-trip 归一化（`saveGame` 内已做）。旧版 `data/games/*.json` 回退读取逻辑保留，恢复后首次持久化自动迁移进 SQLite。
+10. **git 仓库在项目根**（`apps/script-kill/.git`），提交时在此目录执行；外部 pi 仓库的 `.gitignore` 有 `apps/*` 不会跟踪它。
 
 ## 开发流程（每次开发必做）
 
 > **每次完成一个开发任务后，必须：**
+>
 > 1. 更新 `README.md`，使文档与代码现状一致（新功能、命令变化、配置变化、架构变化都要反映）。
 > 2. 运行 `npm run check` 通过类型检查；涉及生成/游玩流程的改动做一次端到端验证。
 > 3. 提交代码：`git add`（禁止 add 到 `.env`、`data/`、`node_modules/`）→ `git commit`，提交信息写清做了什么、为什么（中文/英文皆可，建议 feat/fix/chore 前缀）。
@@ -71,4 +73,4 @@ data/scripts/  data/games/  生成的剧本/会话快照（git 忽略）
 - 真相与所有地点/公共线索只进主持人 prompt；每个角色的私密信息只进该角色自己的 prompt。
 - 主持人在揭晓前被硬性过滤（`leakCheck` 命中真凶名/手法词自动改写）。
 - 投票严格多数（> 半数有效票）抓对真凶则好人胜；平票视为未抓住。
-- 每步操作后快照持久化到 `data/games/`，服务重启可 `POST /api/games/:id/resume` 恢复。
+- 每步操作后快照追加写入 SQLite（`data/games/sessions.sqlite`），服务重启可 `POST /api/games/:id/resume` 恢复；旧 JSON 快照自动兼容迁移。

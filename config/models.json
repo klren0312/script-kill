@@ -48,12 +48,16 @@
 				{
 					"id": "sensenova-6.8-flash-lite",
 					"name": "SenseNova 6.8 Flash Lite"
+				},
+				{
+					"id": "deepseek-v4-flash",
+					"name": "deepseek-v4-flash"
 				}
 			]
 		}
 	},
 	"roles": {
-		"generator": { "provider": "ant-ling", "model": "Ling-3.0-flash", "thinkingLevel": "high" },
+		"generator": { "provider": "sensenova", "model": "sensenova-6.8-flash-lite", "thinkingLevel": "high" },
 		"narrator": { "provider": "sensenova", "model": "sensenova-6.8-flash-lite", "thinkingLevel": "medium" },
 		"player": { "provider": "openrouter", "model": "openrouter/free", "thinkingLevel": "medium" }
 	}

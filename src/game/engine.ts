@@ -89,7 +89,6 @@ export class GameEngine {
 			privateEvents: {},
 			narratorTranscript: [],
 			roleTranscripts: {},
-			winner: undefined,
 		} as GameSession["snapshot"];
 
 		const factory = createAgentFactory(deps.models);
@@ -176,7 +175,8 @@ export class GameEngine {
 
 	private touch(): void {
 		this.session.snapshot.updatedAt = Date.now();
-		this.session.deps.persist();
+		// 持久化是异步排队（SQLite），顺序由持久层保证；fire-and-forget，错误在实现方记录。
+		void this.session.deps.persist();
 	}
 
 	private setPhase(phase: Phase): void {

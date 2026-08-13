@@ -2,7 +2,7 @@
 
 一个独立的剧本杀生成 + 单机游玩系统：
 
-- **生成**：用 `@earendil-works/pi-agent-core` 的 Agent + `.agents/skills/jubensha-gen/SKILL.md` skill，由大模型生成符合 JSON Schema 的完整剧本，自动校验、重试、入库。
+- **生成**：用 `@earendil-works/pi-agent-core` 的 Agent + `skills/jubensha-gen/SKILL.md` skill，由大模型生成符合 JSON Schema 的完整剧本，自动校验、重试、入库。
 - **游玩**：玩家挑选剧本 → 选择自己要扮演的角色 → 其余角色交给独立 Agent（每人一个 `Agent`，自带私有设定与工具）。主持人（DM）由独立 Agent 担任，掌控真相并推进流程。
 - **协议**：Fastify REST + SSE + WebSocket；SSE 供 Web 端（浏览器原生 `EventSource`），WebSocket 供小程序等非 SSE 客户端。
 
@@ -22,7 +22,7 @@ src/
   game/narrator.ts          主持人 prompt、真相、泄漏过滤
   game/tools.ts             角色 Agent 的 5 个工具（speak/whisper/investigate/show/vote）
   game/engine.ts            游戏引擎：状态机、回合循环、投票揭晓
-  game/snapshots.ts         快照持久化与恢复
+  game/store.ts             SQLite 持久层（pi-session-backend，快照读写 + 旧 JSON 兼容）
   server/index.ts           Fastify 实例（路由 + 静态文件）
   server/routes.ts          REST + SSE 路由
   server/games.ts           会话注册表 + 玩家视角公开快照
@@ -32,9 +32,13 @@ public/                     前端页面（index.html / room.html）
 scripts/generate-script.ts  CLI 生成剧本
 scripts/build.ts            打包构建（esbuild 内联依赖 → dist/，免装依赖部署）
 data/scripts/               生成的剧本 JSON（git 忽略）
-data/games/                 游戏会话快照（git 忽略）
+data/games/                 游戏库 sessions.sqlite + 旧版快照 JSON（git 忽略）
 dist/                       构建产物（git 忽略，自包含可部署目录）
 ```
+
+### 持久化
+
+游戏持久化复用 `@earendil-works/pi-session-backend-sqlite-node`（基于 Node 内置 `node:sqlite`，无需原生依赖）：一个游戏 = 一个 SQLite session，每次状态变化以 custom entry 追加完整快照（append-only，最新一条即当前状态），引擎不再自写文件。后端自带跨进程单写者保护（writer lease），旧版 `data/games/*.json` 作为回退读取、恢复后自动迁移。
 
 ## 前端 / 移动端
 
@@ -96,8 +100,9 @@ dist/
   package.json    声明 ESM，node dist/index.js 可直接运行
   config/         模型配置（含 .env.example 模板）
   public/         前端页面
-  .agents/skills/ 生成用 skill
-  data/           运行期剧本与游戏快照（初始为空）
+  skills/         生成用 skill
+  migrations/     SQLite 迁移 SQL（运行时加载建表）
+  data/           运行期剧本与游戏数据（初始为空；games/ 下为 sessions.sqlite）
 ```
 
 部署到服务器：
@@ -131,10 +136,10 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 
 要点：
 
-- `dist/index.js` 已把 Node 依赖（fastify、pi-ai、pi-agent-core 等）全部打包内联，运行只需 Node ≥ 22.19，不读 `node_modules`。
+- `dist/index.js` 已把 Node 依赖（fastify、pi-ai、pi-agent-core 等）全部打包内联，运行只需 Node ≥ 22.19（需内置 `node:sqlite`），不读 `node_modules`。SQLite 建表迁移 SQL 随构建复制到 `dist/migrations/`，运行时按 bundle 相对路径加载。
 - 运行时目录由 `src/paths.ts` 自动定位：从 `index.js` 所在目录向上找 `config/models.json`，因此 `dist/` 放在任何路径都能自包含运行；也可用环境变量 `SCRIPT_KILL_ROOT` 显式指定根目录。
 - API key 只放 `dist/.env`（或服务器环境变量），随构建复制的 `.env.example` 只是空模板，`dist/` 里不会带密钥。
-- 已有剧本/游戏数据：把旧 `data/scripts/`、`data/games/` 拷进 `dist/data/` 对应目录即可。
+- 已有剧本/游戏数据：把旧 `data/scripts/` 拷进 `dist/data/scripts/`；游戏数据把整个 `data/games/`（含 `sessions.sqlite`）拷进 `dist/data/games/` 即可。
 
 ## 模型配置
 
@@ -142,39 +147,51 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 
 ```jsonc
 {
-	"providers": {
-		// 内置 provider：留空即用 pi-ai 的 builtinModels 目录（无 baseUrl，无需 provider 字段）
-		"anthropic": { "models": [] },
-		// 自定义 provider：OpenAI 兼容端点（有 baseUrl 必须声明 provider 字符串，值自定义即可）
-		"my-openai": {
-			"provider": "my-openai",
-			"baseUrl": "https://...",
-			"api": "openai-completions",
-			"apiKey": "$MY_API_KEY",        // 支持字面量 / $ENV_VAR / !command
-			"models": [{ "id": "my-model", "name": "..." }]
-		},
-		// 自定义 provider：Anthropic 兼容端点（如 DeepSeek 网关）
-		"deepseek-gw": {
-			"provider": "deepseek-gw",
-			"baseUrl": "https://api.deepseek.com/anthropic",
-			"api": "anthropic-messages",
-			"apiKey": "$ANTHROPIC_AUTH_TOKEN",
-			"models": [{ "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" }]
-		},
-		// 自定义 provider：ant-ling（OpenAI 兼容）
-		"ant-ling": {
-			"provider": "ant-ling",
-			"baseUrl": "https://api.ant-ling.com/v1",
-			"api": "openai-completions",
-			"apiKey": "$ANT_LING_API_KEY",
-			"models": [{ "id": "Ling-3.0-flash", "name": "Ling 3.0 Flash" }]
-		}
-	},
-	"roles": {
-		"generator": { "provider": "ant-ling", "model": "Ling-3.0-flash", "thinkingLevel": "high" },
-		"narrator":  { "provider": "ant-ling", "model": "Ling-3.0-flash", "thinkingLevel": "medium" },
-		"player":    { "provider": "ant-ling", "model": "Ling-3.0-flash", "thinkingLevel": "low" }
-	}
+  "providers": {
+    // 内置 provider：留空即用 pi-ai 的 builtinModels 目录（无 baseUrl，无需 provider 字段）
+    "anthropic": { "models": [] },
+    // 自定义 provider：OpenAI 兼容端点（有 baseUrl 必须声明 provider 字符串，值自定义即可）
+    "my-openai": {
+      "provider": "my-openai",
+      "baseUrl": "https://...",
+      "api": "openai-completions",
+      "apiKey": "$MY_API_KEY", // 支持字面量 / $ENV_VAR / !command
+      "models": [{ "id": "my-model", "name": "..." }],
+    },
+    // 自定义 provider：Anthropic 兼容端点（如 DeepSeek 网关）
+    "deepseek-gw": {
+      "provider": "deepseek-gw",
+      "baseUrl": "https://api.deepseek.com/anthropic",
+      "api": "anthropic-messages",
+      "apiKey": "$ANTHROPIC_AUTH_TOKEN",
+      "models": [{ "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" }],
+    },
+    // 自定义 provider：ant-ling（OpenAI 兼容）
+    "ant-ling": {
+      "provider": "ant-ling",
+      "baseUrl": "https://api.ant-ling.com/v1",
+      "api": "openai-completions",
+      "apiKey": "$ANT_LING_API_KEY",
+      "models": [{ "id": "Ling-3.0-flash", "name": "Ling 3.0 Flash" }],
+    },
+  },
+  "roles": {
+    "generator": {
+      "provider": "ant-ling",
+      "model": "Ling-3.0-flash",
+      "thinkingLevel": "high",
+    },
+    "narrator": {
+      "provider": "ant-ling",
+      "model": "Ling-3.0-flash",
+      "thinkingLevel": "medium",
+    },
+    "player": {
+      "provider": "ant-ling",
+      "model": "Ling-3.0-flash",
+      "thinkingLevel": "low",
+    },
+  },
 }
 ```
 
@@ -192,25 +209,25 @@ node dist/generate.js "古宅凶案"  # 或直接在服务器上生成剧本
 - AI 角色用 `speak` 工具公开发言，工具的 `content` 参数即为唯一入记录的台词；模型 tool 调用后附带的旁白/策略备注（"心声"）不进入公开记录。
 - 主持人在揭晓前被硬性过滤：`leakCheck` 命中真凶名或手法词时自动改写。
 - 投票：严格多数（> 半数有效票）投出真凶则好人获胜；平票视为未抓住真凶，凶手获胜。
-- 每步操作后快照持久化到 `data/games/`，服务重启后可恢复并继续（`POST /api/games/:id/resume`）。
+- 每步操作后完整快照追加写入 SQLite（`data/games/sessions.sqlite`，一个游戏一个 session），服务重启后可恢复并继续（`POST /api/games/:id/resume`）；旧版 `data/games/*.json` 快照仍可读取，恢复后首次持久化自动迁移进 SQLite。
 
 ## API 一览
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/scripts` | 剧本卡片列表 |
-| GET | `/api/scripts/:id` | 选角视图（无 secret/线索/真相） |
-| POST | `/api/scripts/generate` | 生成剧本 `{topic, playerCount, genre?, difficulty?, id?}` |
-| POST | `/api/games` | 建局 `{scriptId, humanRoleId}` → `{gameId, humanRole}` |
-| GET | `/api/games/:id` | 玩家视角公开快照 |
-| GET | `/api/games/:id/me` | 我的角色卡（含 secret 与线索文本） |
-| GET | `/api/games/:id/events` | SSE 事件流（含重连快照） |
-| POST | `/api/games/:id/start` | 开始游戏 |
-| POST | `/api/games/:id/resume` | 恢复中断的 AI 回合 |
-| POST | `/api/games/:id/action` | `{type: speak\|whisper\|investigate\|show\|endTurn, ...}` |
-| POST | `/api/games/:id/vote` | `{target: roleId\|null}` |
-| POST | `/api/games/:id/polish` | `{text: string}` → `{polished: string}`（AI 润色文本） |
-| WS | `/ws/games/:id?roleId=xxx` | WebSocket 事件推送（供小程序，下行帧与 SSE 同构） |
+| 方法 | 路径                       | 说明                                                      |
+| ---- | -------------------------- | --------------------------------------------------------- |
+| GET  | `/api/scripts`             | 剧本卡片列表                                              |
+| GET  | `/api/scripts/:id`         | 选角视图（无 secret/线索/真相）                           |
+| POST | `/api/scripts/generate`    | 生成剧本 `{topic, playerCount, genre?, difficulty?, id?}` |
+| POST | `/api/games`               | 建局 `{scriptId, humanRoleId}` → `{gameId, humanRole}`    |
+| GET  | `/api/games/:id`           | 玩家视角公开快照                                          |
+| GET  | `/api/games/:id/me`        | 我的角色卡（含 secret 与线索文本）                        |
+| GET  | `/api/games/:id/events`    | SSE 事件流（含重连快照）                                  |
+| POST | `/api/games/:id/start`     | 开始游戏                                                  |
+| POST | `/api/games/:id/resume`    | 恢复中断的 AI 回合                                        |
+| POST | `/api/games/:id/action`    | `{type: speak\|whisper\|investigate\|show\|endTurn, ...}` |
+| POST | `/api/games/:id/vote`      | `{target: roleId\|null}`                                  |
+| POST | `/api/games/:id/polish`    | `{text: string}` → `{polished: string}`（AI 润色文本）    |
+| WS   | `/ws/games/:id?roleId=xxx` | WebSocket 事件推送（供小程序，下行帧与 SSE 同构）         |
 
 ## WebSocket（小程序对接）
 
@@ -231,23 +248,28 @@ ws://<host>:<port>/ws/games/:gameId?roleId=<humanRoleId>
 连接建立后服务端**立即推送一条 `snapshot` 帧**，格式与 SSE 的 `data:` 行一致，便于重连/刷新恢复界面：
 
 ```json
-{ "type": "snapshot", "snapshot": { /* PublicSnapshot */ } }
+{
+  "type": "snapshot",
+  "snapshot": {
+    /* PublicSnapshot */
+  }
+}
 ```
 
 之后收到的帧与 SSE 事件一一对应，`type` 取值：
 
-| type | 说明 |
-| --- | --- |
-| `phase` | 阶段切换 |
-| `turn` | 回合切换 |
-| `speak` | 公开发言 |
-| `whisper` | 私聊（私密） |
+| type          | 说明         |
+| ------------- | ------------ |
+| `phase`       | 阶段切换     |
+| `turn`        | 回合切换     |
+| `speak`       | 公开发言     |
+| `whisper`     | 私聊（私密） |
 | `investigate` | 调查（私密） |
-| `show` | 出示线索 |
-| `vote` | 投票 |
-| `narrator` | 主持人旁白 |
-| `system` | 系统提示 |
-| `game_end` | 揭晓结果 |
+| `show`        | 出示线索     |
+| `vote`        | 投票         |
+| `narrator`    | 主持人旁白   |
+| `system`      | 系统提示     |
+| `game_end`    | 揭晓结果     |
 
 客户端按 `ev.type` 分发即可，与 `room.html` 的 `handleEvent` 逻辑一致。
 

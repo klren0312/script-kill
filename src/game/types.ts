@@ -95,7 +95,8 @@ export interface GameSession {
 
 export interface EngineDeps {
 	onEvent: (event: GameEvent) => void;
-	persist: () => void;
+	/** 持久化回调：引擎内部 fire-and-forget，实现方需自行捕获错误。 */
+	persist: () => void | Promise<void>;
 	models: MutableModels;
 	narratorModel: Model<any>;
 	narratorThinking: ThinkingLevel;

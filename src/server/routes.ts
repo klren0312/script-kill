@@ -70,7 +70,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 			return reply.code(400).send({ error: "需要 scriptId 与 humanRoleId" });
 		}
 		try {
-			const result = createGame(body.scriptId, body.humanRoleId, deps);
+			const result = await createGame(body.scriptId, body.humanRoleId, deps);
 			return result;
 		} catch (e) {
 			return reply.code(400).send({ error: (e as Error).message });
@@ -80,7 +80,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 	app.get("/api/games/:id", async (req, reply) => {
 		const id = (req.params as { id: string }).id;
 		try {
-			const session = getSession(id, deps);
+			const session = await getSession(id, deps);
 			return publicSnapshot(session);
 		} catch (e) {
 			return reply.code(404).send({ error: (e as Error).message });
@@ -90,7 +90,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 	app.get("/api/games/:id/me", async (req, reply) => {
 		const id = (req.params as { id: string }).id;
 		try {
-			const session = getSession(id, deps);
+			const session = await getSession(id, deps);
 			const script = session.script;
 			const view = humanRoleView(script, session.snapshot.humanRoleId);
 			if (!view) return reply.code(404).send({ error: "角色不存在" });
@@ -102,7 +102,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 
 	app.post("/api/games/:id/start", async (req, reply) => {
 		try {
-			const engine = new GameEngine(getSession((req.params as { id: string }).id, deps));
+			const engine = new GameEngine(await getSession((req.params as { id: string }).id, deps));
 			await engine.start();
 			return { ok: true };
 		} catch (e) {
@@ -112,7 +112,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 
 	app.post("/api/games/:id/resume", async (req, reply) => {
 		try {
-			const engine = new GameEngine(getSession((req.params as { id: string }).id, deps));
+			const engine = new GameEngine(await getSession((req.params as { id: string }).id, deps));
 			await engine.resume();
 			return { ok: true };
 		} catch (e) {
@@ -124,7 +124,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 		const body = (req.body ?? {}) as { type?: string; content?: string; target?: string; clueId?: string };
 		if (!body.type) return reply.code(400).send({ error: "需要 type" });
 		try {
-			const engine = new GameEngine(getSession((req.params as { id: string }).id, deps));
+			const engine = new GameEngine(await getSession((req.params as { id: string }).id, deps));
 			await engine.humanAction({
 				type: body.type,
 				content: body.content,
@@ -140,7 +140,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 	app.post("/api/games/:id/vote", async (req, reply) => {
 		const body = (req.body ?? {}) as { target?: string | null };
 		try {
-			const engine = new GameEngine(getSession((req.params as { id: string }).id, deps));
+			const engine = new GameEngine(await getSession((req.params as { id: string }).id, deps));
 			await engine.humanVote(body.target === "" ? null : (body.target ?? null));
 			return { ok: true };
 		} catch (e) {
@@ -154,7 +154,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 			return reply.code(400).send({ error: "需要 text" });
 		}
 		try {
-			const engine = new GameEngine(getSession((req.params as { id: string }).id, deps));
+			const engine = new GameEngine(await getSession((req.params as { id: string }).id, deps));
 			const polished = await engine.polishText(body.text.trim());
 			return { polished };
 		} catch (e) {
@@ -166,7 +166,7 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 
 	app.get("/api/games/:id/events", async (req, reply) => {
 		const id = (req.params as { id: string }).id;
-		const session = getSession(id, deps);
+		const session = await getSession(id, deps);
 		reply.hijack();
 		reply.raw.writeHead(200, {
 			"Content-Type": "text/event-stream",
@@ -191,20 +191,21 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 				socket.end();
 				return;
 			}
-			try {
-				const session = getSession(id, deps);
-				try {
-					socket.send(JSON.stringify({
-						type: "snapshot",
-						snapshot: publicSnapshot(session),
-					}));
-				} catch {
-					return;
-				}
-				wsHub.subscribe(id, socket);
-			} catch {
-				socket.end();
-			}
+			// websocket handler 非 async：异步取会话后用 then 处理。
+			void getSession(id, deps).then(
+				(session) => {
+					try {
+						socket.send(JSON.stringify({
+							type: "snapshot",
+							snapshot: publicSnapshot(session),
+						}));
+					} catch {
+						return;
+					}
+					wsHub.subscribe(id, socket);
+				},
+				() => socket.end(),
+			);
 		},
 	);
 }

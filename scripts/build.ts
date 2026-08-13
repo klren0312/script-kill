@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { appRoot } from "../src/paths.js";
 
@@ -8,7 +8,7 @@ import { appRoot } from "../src/paths.js";
  *
  * - `dist/index.js`    服务器入口（esbuild 单文件 ESM，依赖全部内联）
  * - `dist/generate.js` CLI 生成剧本入口（同样内联）
- * - `dist/config/ public/ .agents/`  运行时资源（模型配置 / 前端 / skill）
+ * - `dist/config/ public/ skills/`  运行时资源（模型配置 / 前端 / skill）
  * - `dist/data/`       运行期剧本与游戏快照目录（初始为空）
  * - `dist/package.json` 声明 ESM，使 `node dist/index.js` 可直接运行
  *
@@ -54,11 +54,26 @@ await build({
 	outfile: resolve(dist, "generate.js"),
 });
 
-console.log("[build] 复制运行时资源 config/ public/ .agents/ ...");
-for (const dir of ["config", "public", ".agents"]) {
+console.log("[build] 复制运行时资源 config/ public/ skills/ ...");
+for (const dir of ["config", "public", "skills"]) {
 	cpSync(resolve(appRoot, dir), resolve(dist, dir), { recursive: true });
 }
 cpSync(resolve(appRoot, ".env.example"), resolve(dist, ".env.example"), { force: true });
+
+// SQLite session backend 在运行时按 import.meta.url 读取迁移 SQL：esbuild 不会内联 .sql 文件，
+// 打包后位于 dist/index.js 旁，故复制到 dist/migrations/（与 bundle 内 new URL("./migrations/...") 对齐）。
+const sqliteMigrations = resolve(
+	appRoot,
+	"node_modules",
+	"@earendil-works",
+	"pi-session-backend-sqlite-node",
+	"dist",
+	"sqlite",
+	"migrations",
+);
+if (existsSync(sqliteMigrations)) {
+	cpSync(sqliteMigrations, resolve(dist, "migrations"), { recursive: true });
+}
 
 console.log("[build] 初始化空 data/ 目录 ...");
 for (const sub of ["scripts", "games"]) {

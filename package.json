@@ -10,7 +10,7 @@
 		"dev": "tsx watch src/index.ts",
 		"start": "tsx src/index.ts",
 		"build": "tsx scripts/build.ts",
-    "deploy": "tsx scripts/deploy.ts",
+		"deploy": "tsx scripts/deploy.ts",
 		"start:prod": "node dist/index.js",
 		"check": "tsc --noEmit",
 		"generate": "tsx scripts/generate-script.ts"
@@ -18,6 +18,7 @@
 	"dependencies": {
 		"@earendil-works/pi-agent-core": "^0.84.1",
 		"@earendil-works/pi-ai": "^0.84.1",
+		"@earendil-works/pi-session-backend-sqlite-node": "^0.84.1",
 		"@fastify/static": "^8.0.0",
 		"@fastify/websocket": "^11.3.0",
 		"fastify": "^5.0.0",
