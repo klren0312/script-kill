@@ -192,25 +192,26 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 		{ websocket: true },
 		(socket, req) => {
 			const id = req.params.id;
-			const humanRoleId = req.query.roleId;
-			if (!humanRoleId) {
-				socket.end();
-				return;
-			}
+			const roleId = req.query.roleId;
 			// websocket handler 非 async：异步取会话后用 then 处理。
+			// 注意：roleId 仅用于按客户端身份过滤私密事件，缺失时作为旁观者，
+			// 仍可接收全部 public 事件（含 AI 对话），不应因此关闭连接。
 			void getSession(id, deps).then(
 				(session) => {
+					// 先订阅，再发快照：订阅失败也能在 catch 中统一移除，
+					// 避免 socket.send 抛错导致永不订阅而收不到后续实时事件。
+					wsHub.subscribe(id, socket, roleId);
 					try {
 						socket.send(JSON.stringify({
 							type: "snapshot",
 							snapshot: publicSnapshot(session),
 						}));
 					} catch {
-						return;
+						/* ignore：快照失败不影响后续实时事件 */
 					}
-					wsHub.subscribe(id, socket);
+					socket.on("close", () => wsHub.unsubscribe(id, socket));
 				},
-				() => socket.end(),
+				() => socket.close(),
 			);
 		},
 	);
