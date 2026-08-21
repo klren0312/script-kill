@@ -173,16 +173,27 @@ export async function routes(app: FastifyInstance, opts: RouteOpts): Promise<voi
 		}
 		const session = await getSession(id, deps);
 		reply.hijack();
-		reply.raw.writeHead(200, {
-			"Content-Type": "text/event-stream",
-			"Cache-Control": "no-cache, no-transform",
-			Connection: "keep-alive",
-			...corsHeadersFor(req.headers.origin),
-		});
-		reply.raw.write("retry: 1000\n\n");
-		// 连接建立后先推送一次当前公开快照，便于重连/刷新恢复界面
-		reply.raw.write(`data: ${JSON.stringify({ type: "snapshot", snapshot: publicSnapshot(session) })}\n\n`);
-		sseHub.subscribe(id, reply);
+		try {
+			reply.raw.writeHead(200, {
+				"Content-Type": "text/event-stream",
+				"Cache-Control": "no-cache, no-transform",
+				Connection: "keep-alive",
+				...corsHeadersFor(req.headers.origin),
+			});
+			reply.raw.write("retry: 1000\n\n");
+			// 连接建立后先推送一次当前公开快照，便于重连/刷新恢复界面
+			reply.raw.write(`data: ${JSON.stringify({ type: "snapshot", snapshot: publicSnapshot(session) })}\n\n`);
+			sseHub.subscribe(id, reply);
+		} catch (_e) {
+			// hijack 后无法发送 HTTP 错误，只能记录日志
+			console.error("SSE 连接建立失败:", _e);
+			// 尝试关闭连接
+			try {
+				reply.raw.end();
+			} catch (_) {
+				// 忽略关闭失败
+			}
+		}
 	});
 
 	// ---------- WebSocket（供小程序等非 SSE 客户端使用）----------
