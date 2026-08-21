@@ -21,7 +21,10 @@ export class SseHub {
 				this.stopHeartbeat(gameId);
 				return;
 			}
-			const heartbeat = `: heartbeat\n\n`;
+			// 可观察心跳：命名事件 + 数据帧。此前用 `: heartbeat` 注释只能保活 TCP，
+			// EventSource 对注释行不触发任何事件，客户端无法感知连接健康；
+			// 改为 event: ping 后，前端监听该事件即可做 90s 级判活（3 个心跳周期）。
+			const heartbeat = `event: ping\ndata: {"type":"ping"}\n\n`;
 			for (const reply of set) {
 				try {
 					reply.raw.write(heartbeat);

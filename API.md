@@ -549,8 +549,17 @@ curl -X POST http://127.0.0.1:3000/api/games/01J9X...uuid/polish \
 - **机制**：
   - 连接建立后先推送一条 `snapshot` 事件（当前 `PublicSnapshot`），便于刷新/重连恢复界面。
   - 之后服务器按 `data: <JSON>\n\n` 格式推送 `GameEvent`。
+  - **心跳**：每个房间有订阅者时，服务器每 30s 推送一帧可观察心跳：
+
+    ```text
+    event: ping\ndata: {"type":"ping"}\n\n
+    ```
+
+    命名事件不会触发 `onmessage`，客户端需 `es.addEventListener("ping", ...)` 接收；
+    用于客户端判活（如连续 3 个周期未收到任何帧则主动重连）兼保活 TCP/代理链路。
   - `retry: 1000` 指示客户端断线 1s 后重连。
-  - 私密事件（`whisper`/`investigate`）只推送给对应角色连接的客户端。
+  - 私密事件（`whisper`/`investigate`）在服务端按建局时的 `humanRoleId` 过滤：
+    仅 `scope === "public"` 或 `scope === humanRoleId` 的事件会被广播。
 
 **事件类型（`GameEvent.type`）**：
 
