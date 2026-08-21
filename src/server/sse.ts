@@ -70,7 +70,24 @@ export class SseHub {
 		const set = this.clients.get(gameId);
 		if (!set || set.size === 0) return;
 		const data = `data: ${JSON.stringify(event)}\n\n`;
-		for (const reply of set) reply.raw.write(data);
+		const toRemove: Reply[] = [];
+		for (const reply of set) {
+			try {
+				reply.raw.write(data);
+			} catch (_e) {
+				// 静默忽略，标记为待移除
+				toRemove.push(reply);
+			}
+		}
+		// 移除写失败的客户端
+		for (const reply of toRemove) {
+			set.delete(reply);
+		}
+		// 如果房间无客户端，清理心跳
+		if (set.size === 0) {
+			this.clients.delete(gameId);
+			this.stopHeartbeat(gameId);
+		}
 	}
 
 	clientsCount(gameId: string): number {
